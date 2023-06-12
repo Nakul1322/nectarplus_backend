@@ -1,0 +1,8 @@
+node_modules
+.env
+package-lock.json
+.vscode
+coverage
+.scannerwork
+docker-compose.yml
+sonar-project.properties
