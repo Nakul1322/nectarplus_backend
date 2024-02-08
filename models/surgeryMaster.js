@@ -5,59 +5,58 @@ const surgeryMasterSchema = new Schema(
   {
     title: {
       type: String,
-      // required: true,
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
     },
     seoTitle: {
       type: String,
-      // required: true,
     },
     seoDescription: {
       type: String,
-      // required: true,
-    },
-    name: {
-      type: String,
-      unique: true,
     },
     imageUrl: {
       type: String,
-      // required: true,
     },
     description: {
       type: String,
-      // required: true,
     },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: "users",
-      default: null
+      default: null,
     },
     modifiedBy: {
       type: Schema.Types.ObjectId,
       ref: "users",
-      default: null
+      default: null,
     },
     components: [
       {
         sno: {
           type: Number,
-          // required: true,
         },
         title: {
           type: String,
-          // required: true,
         },
         description: {
           type: String,
-          // required: true,
         },
         image: [
           {
             type: String,
-            // required: true,
           },
-        ]
-      }],
+        ],
+      },
+    ],
+    departmentId: {
+      type: Schema.Types.ObjectId,
+      ref: "departments",
+    },
+    slug: {
+      type: String,
+    },
   },
   {
     timestamps: true,

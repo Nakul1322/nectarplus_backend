@@ -5,26 +5,33 @@ const schema = require("./schema");
 
 const router = Router({ mergeParams: true });
 
-// Admin module
+router.get(
+  "/homepage",
+  validate(schema.commonList, 'query'),
+  patientController.homepageSuggestionList
+);
+
+router.get(
+  "/feedback/list",
+  verifyAuthToken,
+  validate(schema.feedbackList, 'query'),
+  patientController.patientFeedbackHistory
+);
 
 router.get(
   "/admin",
-  // isAdmin,
+  verifyAuthToken,
+  isAdmin,
   validate(schema.patientList, 'query'),
   patientController.patientList
 );
 
-// Doctor module
-
-// Patient side list
 router.get(
   "/doctor/list",
   verifyAuthToken,
   validate(schema.getPatientList, 'query'),
   patientController.getPatientList
 );
-
-// crud for patientClinicalRecords - missing edit n delete
 
 router.get(
   "/doctor/appointment/record",
@@ -41,23 +48,19 @@ router.post(
   patientController.addPatientRecord
 )
 
-// Patient Appointment List
 router.get(
   "/doctor/appointment/list",
   verifyAuthToken,
-  validate(schema.patientId, 'query'),
+  validate(schema.patientAppointmentList, 'query'),
   patientController.patientAppointmentList
 );
 
-// Get patient record
 router.get(
   "/doctor/record",
   verifyAuthToken,
   validate(schema.patientId, 'query'),
   patientController.getPatientData
 );
-
-// Doctor edit patient data
 
 router.put(
   "/doctor/record",
@@ -66,21 +69,44 @@ router.put(
   patientController.editPatientData
 );
 
-// router.put(
-//   "/doctor/appointment/record",
-//   isDoctor,
-//   validate(schema.appointmentId, 'query'),
-//   validate(schema.editPatientRecord),
-//   patientController.editPatientRecord
-// );
-
-//  Hospital Module - patient listing
 router.get(
   "/hospital",
-  // isAdmin,
+  verifyAuthToken,
   validate(schema.hospitalPatientList, 'query'),
   patientController.hospitalPatientList
 );
 
+router.get(
+  "/hospital/appointment-list",
+  verifyAuthToken,
+  validate(schema.hospitalAppointmentList, 'query'),
+  patientController.hospitalAppointmentLists
+);
+
+router.get(
+  "/hospital/history",
+  verifyAuthToken,
+  validate(schema.historyRecord, 'query'),
+  patientController.patientHistoryRecordHospital
+);
+
+router.get(
+  "/profile",
+  verifyAuthToken,
+  patientController.patientProfile
+);
+
+router.put(
+  "/profile",
+  validate(schema.editPatientData),
+  verifyAuthToken,
+  patientController.patientEditProfile
+);
+
+router.get(
+  "/establishment-details",
+  validate(schema.recordId, 'query'),
+  patientController.establishmentDetails
+);
 
 module.exports = router;

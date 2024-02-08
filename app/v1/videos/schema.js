@@ -4,7 +4,8 @@ const { id } = require('../../../utils/validation');
 const addVideo = Joi.object({
 	title: Joi.string().trim().required(),
 	url: Joi.string().trim().uri().required(),
-    userId: Joi.string().trim().optional()
+    userId: Joi.string().trim().optional(),
+    userType: Joi.number().optional().allow(null),
 })
 
 const updateVideo = Joi.object().keys({

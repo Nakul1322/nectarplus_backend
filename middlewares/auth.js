@@ -1,11 +1,12 @@
 const jwt = require("jsonwebtoken");
 const { env } = process;
 const secretKey = env.SECRET;
+const API_KEY = env.API_KEY;
 const response = require("../utils/response");
 const httpStatus = require("http-status-codes");
 const { common } = require("../services/index");
-const { User,Admin } = require('../models/index');
-const { constants } = require('../utils/constant');
+const { User, Admin, Session } = require("../models/index");
+const { constants } = require("../utils/constant");
 
 const generateAuthJwt = (payload) => {
   const { expiresIn, ...params } = payload;
@@ -20,34 +21,38 @@ const verifyAuthToken = async (req, res, next) => {
   try {
     let token = req.headers["authorization"];
     if (!token) {
-      console.log("hi");
       return response.error(
         { msgCode: "TOKEN_REQUIRED" },
         res,
-        httpStatus.StatusCodes.BAD_REQUEST
+        httpStatus.StatusCodes.UNAUTHORIZED
       );
     }
     token = token.replace(/^Bearer\s+/, "");
     jwt.verify(token, secretKey, async (error, decoded) => {
       if (error) {
-        console.log(
-          "🚀 ~ file: auth.js ~ line 128 ~ jwt.verify ~ error",
-          error
-        );
+        console.log(error);
         return response.error(
           { msgCode: "INVALID_TOKEN" },
           res,
-          httpStatus.StatusCodes.BAD_REQUEST
+          httpStatus.StatusCodes.UNAUTHORIZED
         );
+      }
+      if (decoded?.tokenType === constants.TOKEN_TYPE.LOGIN) {
+        const sessionData = await common.findObject(Session.model, {
+          jwt: token,
+        });
+        if (!sessionData)
+          return response.error(
+            { msgCode: "INVALID_TOKEN" },
+            res,
+            httpStatus.StatusCodes.UNAUTHORIZED
+          );
       }
       req.data = decoded;
       return next();
-    })
+    });
   } catch (error) {
-    console.log(
-      "🚀 ~ file: auth.js ~ line 38 ~ exports.verifyAuthToken=async ~ error",
-      error
-    );
+    console.log(error);
     return response.error(
       { msgCode: "INTERNAL_SERVER_ERROR" },
       res,
@@ -61,17 +66,17 @@ const isAdmin = async (req, res, next) => {
     const decode = req.data;
     if (decode.userType !== constants.USER_TYPES.ADMIN) {
       return response.error(
-        { msgCode: "INVALID_TOKEN" },
+        { msgCode: "UNAUTHORISED_ACCESS" },
         res,
-        httpStatus.StatusCodes.BAD_REQUEST
+        httpStatus.StatusCodes.UNAUTHORIZED
       );
     }
     const findUser = await common.getById(Admin.model, req.data.userId);
-    if (findUser?.status !== 1) {
+    if (findUser?.status !== constants.PROFILE_STATUS.ACTIVE) {
       return response.error(
         { msgCode: "SESSION_EXPIRE" },
         res,
-        httpStatus.StatusCodes.UNAUTHORIZED
+        httpStatus.StatusCodes.FORBIDDEN
       );
     }
     next();
@@ -105,7 +110,7 @@ const isAdminCreator = async (req, res, next) => {
     }
     next();
   } catch (error) {
-    console.log("🚀 ~ file: auth.js ~ line 78 ~ isAdminCreator ~ error", error);
+    console.log(error);
     return response.error(
       { msgCode: "INTERNAL_SERVER_ERROR" },
       res,
@@ -126,7 +131,7 @@ const isCreator = async (req, res, next) => {
     }
     next();
   } catch (error) {
-    console.log("🚀 ~ file: auth.js ~ line 99 ~ isCreator ~ error", error);
+    console.log(error);
     return response.error(
       { msgCode: "INTERNAL_SERVER_ERROR" },
       res,
@@ -140,13 +145,13 @@ const isDoctor = async (req, res, next) => {
     const decode = req.data;
     if (decode.userType !== constants.USER_TYPES.DOCTOR) {
       return response.error(
-        { msgCode: "INVALID_TOKEN" },
+        { msgCode: "UNAUTHORISED_ACCESS" },
         res,
-        httpStatus.StatusCodes.BAD_REQUEST
+        httpStatus.StatusCodes.UNAUTHORIZED
       );
     }
     const findUser = await common.getById(User.model, req.data.userId);
-    if (findUser?.status !== 1) {
+    if (findUser?.status !== constants.PROFILE_STATUS.ACTIVE) {
       return response.error(
         { msgCode: "SESSION_EXPIRE" },
         res,
@@ -168,13 +173,13 @@ const isHospital = async (req, res, next) => {
     const decode = req.data;
     if (decode.userType !== constants.USER_TYPES.HOSPITAL) {
       return response.error(
-        { msgCode: "INVALID_TOKEN" },
+        { msgCode: "UNAUTHORISED_ACCESS" },
         res,
-        httpStatus.StatusCodes.BAD_REQUEST
+        httpStatus.StatusCodes.UNAUTHORIZED
       );
     }
     const findUser = await common.getById(User.model, req.data.userId);
-    if (findUser?.status !== 1) {
+    if (findUser?.status !== constants.PROFILE_STATUS.ACTIVE) {
       return response.error(
         { msgCode: "SESSION_EXPIRE" },
         res,
@@ -197,13 +202,13 @@ const isPatient = async (req, res, next) => {
     const decode = req.data;
     if (decode.userType !== constants.USER_TYPES.PATIENT) {
       return response.error(
-        { msgCode: "INVALID_TOKEN" },
+        { msgCode: "UNAUTHORISED_ACCESS" },
         res,
-        httpStatus.StatusCodes.BAD_REQUEST
+        httpStatus.StatusCodes.UNAUTHORIZED
       );
     }
     const findUser = await common.getById(User.model, req.data.userId);
-    if (findUser?.status !== 1) {
+    if (findUser?.status !== constants.PROFILE_STATUS.ACTIVE) {
       return response.error(
         { msgCode: "SESSION_EXPIRE" },
         res,
@@ -248,6 +253,34 @@ const isDoctorHospitalAdmin = async (req, res, next) => {
   }
 };
 
+const verifyApiKey = (req, res, next) => {
+  try {
+    const apiKey = req?.headers["x-api-key"];
+    if (!apiKey) {
+      return response.error(
+        { msgCode: "MISSING_API_KEY" },
+        res,
+        httpStatus.StatusCodes.FORBIDDEN
+      );
+    }
+
+    if (apiKey !== API_KEY) {
+      return response.error(
+        { msgCode: "INVALID_API_KEY" },
+        res,
+        httpStatus.StatusCodes.FORBIDDEN
+      );
+    }
+    return next();
+  } catch (error) {
+    return response.error(
+      { msgCode: "INTERNAL_SERVER_ERROR" },
+      res,
+      httpStatus.StatusCodes.INTERNAL_SERVER_ERROR
+    );
+  }
+};
+
 module.exports = {
   generateAuthJwt,
   verifyAuthToken,
@@ -257,5 +290,6 @@ module.exports = {
   isDoctor,
   isHospital,
   isPatient,
-  isDoctorHospitalAdmin
+  isDoctorHospitalAdmin,
+  verifyApiKey,
 };

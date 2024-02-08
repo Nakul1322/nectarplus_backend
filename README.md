@@ -6,7 +6,7 @@
 
 1. MongoDb Atlas URL(TESTING): 'mongodb+srv://nectarplus:nectarplus2023@nectarplus.75a09ha.mongodb.net/nectarplus'
 2. NodeJs v18x
-3. AWS (S3 Bucket, Route53)
+3. AWS (S3 Bucket)
 4. NGINX Web Server: To deploy our code to server with pm2 services
 
 # Installation

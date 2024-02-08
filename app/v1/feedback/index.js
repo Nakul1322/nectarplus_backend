@@ -1,54 +1,40 @@
 const { Router } = require("express");
 const feedbackController = require("./controller");
-const { validate } = require("../../../middlewares/index");
+const { validate, verifyAuthToken } = require("../../../middlewares/index");
 const schema = require("./schema");
 
 const router = Router({ mergeParams: true });
 
-router.get("/allFeedback", feedbackController.allFeedback); //
-router.get("/allMasterFeedback", feedbackController.allMasterFeedback);
+router.get("/all-feedback", feedbackController.allFeedback);
+
+router.get("/all-master-feedback", feedbackController.allMasterFeedback);
+
 router.post(
-  "/addMasterFeedback",
+  "/add-master-feedback",
   validate(schema.addMasterFeedback),
   feedbackController.addMasterFeedback
 );
-router.get(
-  "/:id",
-  //   validate(schema.findMasterFeedback),
-  feedbackController.findMasterFeedback
-);
+
+router.get("/:id", feedbackController.findMasterFeedback);
+
 router.put(
   "/:id",
   validate(schema.updateMasterFeedback),
   feedbackController.updateMasterFeedback
-); //,validate(schema.adminEditDoctor)
-router.delete(
-  "/:id",
-  //   validate(schema.deleteMasterFeedback),
-  feedbackController.deleteMasterFeedback
 );
 
-router.post(
-  "/addFeedback",
-  validate(schema.addFeedback),
-  feedbackController.addFeedback
-);
-router.get(
-  "/findFeedback/:id",
-  //   validate(schema.findFeedback),
-  feedbackController.findFeedback
-);
+router.delete("/:id", feedbackController.deleteMasterFeedback);
+
+router.post("/add-feedback", verifyAuthToken, feedbackController.addFeedback);
+
+router.get("/find-feedback/:id", feedbackController.findFeedback);
+
 router.put(
-  "/updateFeedback/:id",
+  "/update-feedback/:id",
   validate(schema.updateFeedback),
   feedbackController.updateFeedback
-); //,validate(schema.adminEditDoctor)
-router.delete(
-  "/deleteFeedback/:id",
-  //   validate(schema.deleteFeedback),
-  feedbackController.deleteFeedback
 );
 
-
+router.delete("/delete-feedback/:id", feedbackController.deleteFeedback);
 
 module.exports = router;

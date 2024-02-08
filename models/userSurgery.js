@@ -13,6 +13,10 @@ const userSurgerySchema = new Schema(
       ref: "Surgery",
       required: true,
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
     city: {
       type: String,
       default: null,
@@ -23,11 +27,11 @@ const userSurgerySchema = new Schema(
     },
     email: {
       type: String,
-      default: null
+      default: null,
     },
     mobileNo: {
       type: String,
-      required: true
+      required: true,
     },
     // claimedBy: {
     //   type: Schema.Types.ObjectId,

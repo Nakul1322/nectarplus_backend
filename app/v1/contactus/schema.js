@@ -1,15 +1,16 @@
 const Joi = require("joi");
+const { constants } = require("../../../utils/constant");
 
 const addContactUs = Joi.object().keys({
     name: Joi.string().required(),
-    phone: Joi.string().required(),
-    email: Joi.string().required().allow(null),
+    phone: Joi.string().length(10).pattern(constants.regexForMobile).required(),
+    email: Joi.string().allow(null),
     comment: Joi.string().optional().allow(null)
 });
 
 const updateContactUs = Joi.object().keys({
     name: Joi.string().optional(),
-    phone: Joi.string().optional(),
+    phone: Joi.string().length(10).pattern(constants.regexForMobile).optional(),
     email: Joi.string().optional().allow(null),
     comment: Joi.string().optional().allow(null),
 });

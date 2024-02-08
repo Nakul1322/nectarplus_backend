@@ -8,7 +8,8 @@ const {
   isDoctor,
   isHospital,
   isPatient,
-  isDoctorHospitalAdmin
+  isDoctorHospitalAdmin,
+  verifyApiKey
 } = require("./auth");
 const { validate } = require("./request-validator");
 
@@ -23,5 +24,6 @@ module.exports = {
   isDoctor,
   isHospital,
   isPatient,
-  isDoctorHospitalAdmin
+  isDoctorHospitalAdmin,
+  verifyApiKey
 };

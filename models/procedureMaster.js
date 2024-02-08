@@ -1,19 +1,30 @@
 const { Schema } = require("mongoose");
-const { constants } = require('../utils/index')
+const { constants } = require("../utils/index");
 const db = require("../config/database").getUserDB();
 
 const procedureMasterSchema = new Schema(
   {
     name: {
       type: String,
-      required: true,
-      unique: true,
+    },
+    description: {
+      type: String,
+    },
+    links: {
+      type: String,
+    },
+    slug: {
+      type: String,
     },
     status: {
-        type: Number,
-        enum: constants.STATUS,
-        default: constants.STATUS.ACTIVE,
-      },
+      type: Number,
+      enum: constants.PROFILE_STATUS,
+      default: constants.PROFILE_STATUS.ACTIVE,
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: "User",
@@ -21,6 +32,9 @@ const procedureMasterSchema = new Schema(
     modifiedBy: {
       type: Schema.Types.ObjectId,
       ref: "User",
+    },
+    slug: {
+      type: String,
     },
   },
   {

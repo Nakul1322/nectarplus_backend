@@ -1,16 +1,21 @@
 const users = require("./user");
 const common = require("./common");
 const doctor = require("./doctor");
-const appointment = require("./appointment")
+const appointmentService = require("./appointment")
 const patient = require('./patient')
 const hospital = require("./hospital");
-
+const notification = require("./notification");
+const surgery =  require("./surgery")
+const adminService = require("./admin");
 
 module.exports = {
   users,
   common,
-  appointment,
+  appointmentService,
   patient,
   doctor,
-  hospital
+  hospital,
+  notification,
+  surgery,
+  adminService
 };

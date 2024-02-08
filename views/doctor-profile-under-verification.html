@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro&display=swap" rel="stylesheet" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Document</title>
+  <style>
+    .main {
+      max-width: 496px;
+      margin: auto;
+
+      @media screen and (max-width: 576px) {
+        width: 100%;
+      }
+    }
+
+    body {
+      font-size: 16px !important;
+      font-family: "Source Code Pro", monospace !important;
+    }
+
+    table {
+      border: 1px solid rgba(0, 0, 0, 0.3);
+      border-spacing: 0;
+    }
+
+    span {
+      font-weight: 600 !important;
+    }
+
+    a {
+      color: #45197c;
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .content-wrap {
+      padding: 10px 48px;
+
+      @media screen and (max-width: 576px) {
+        padding: 10px 24px;
+      }
+    }
+  </style>
+</head>
+
+<body style="margin: 0; padding: 0; width: 100%">
+  <center class="main">
+    <table style="width: 100%">
+      <caption></caption>
+      <tr style="display: none;">
+        <th></th>
+      </tr>
+      <tr>
+        <td style="background: #45197c; text-align: center; padding: 15px 0">
+          <img
+            src="https://nectorplus.s3.ap-south-1.amazonaws.com/00c70640-31bc-11ee-a0c0-ad1b782616cb-Nectar%20Logo%20%281%29.png"
+            alt="" />
+        </td>
+      </tr>
+
+      <!-- content section -->
+      <tr>
+        <td class="content-wrap">
+          <p>Dear <span>
+              <%=doctorName%>
+            </span> ,</p>
+          <p>
+            Thank you for registering with Nectar Health. We have received
+            your profile details and are currently in the process of verifying
+            the information provided.
+          </p>
+          <p>
+            Our team will carefully review your profile to ensure its accuracy
+            and compliance with our platform's guidelines.
+            <span>
+              This verification process may take 48 hours in the working period to
+              complete.
+            </span>
+          </p>
+          <p>
+            Once your profile is approved, you will receive a confirmation
+            notification, and you will be able to access all the features and
+            benefits of our platform.
+          </p>
+
+          <p>
+            If we require any additional information or documentation during
+            the verification process, we will reach out to you via the contact
+            details provided in your profile.
+          </p>
+
+          <p>
+            We appreciate your patience and cooperation. If you have any
+            questions or need any assistance, please feel free to contact our
+            support team at <a href="#"> info@nectarplus.health </a>.
+          </p>
+
+          <p>
+            Thank you for choosing Nectar Plus Health. We look forward to
+            having you as a trusted healthcare provider on our platform.
+          </p>
+          <p>
+            Best Regards, <br />
+            Nectar Plus Health
+          </p>
+        </td>
+      </tr>
+
+      <!-- footer -->
+
+      <tr>
+        <td style="
+              background: #eee;
+              text-align: center;
+              padding: 20px 0;
+              border-top: 1px solid #45197c;
+            ">
+          <img
+            src="https://nectorplus.s3.ap-south-1.amazonaws.com/aa697f30-31bb-11ee-a0c0-ad1b782616cb-Nectar%20Logo.png"
+            alt="" />
+          <div>
+            <a href="https://www.facebook.com/nectarplushealth"><img
+                src="https://nectorplus.s3.ap-south-1.amazonaws.com/41b9e010-31bb-11ee-a0c0-ad1b782616cb-Facebook.png"
+                alt="img" height="20" width="20" /></a>
+            <a href="https://twitter.com/nectarhealth_IN"><img
+                src="https://nectorplus.s3.ap-south-1.amazonaws.com/a03380b0-5df3-11ee-bc42-013c92cb596b-x.png"
+                alt="img" height="20" width="20" /></a>
+            <a href="https://www.instagram.com/nectarplushealth/"><img
+                src="https://nectorplus.s3.ap-south-1.amazonaws.com/74e2a580-31bb-11ee-a0c0-ad1b782616cb-Instagram.png"
+                alt="img" height="20" width="20" /></a>
+            <a href="https://www.youtube.com/@nectarplushealth"><img
+                src="https://nectorplus.s3.ap-south-1.amazonaws.com/916513f0-31bb-11ee-a0c0-ad1b782616cb-YouTube.png"
+                alt=" img" height="20" width="20" /></a>
+            <a href="https://www.linkedin.com/company/nectar-plus-health/about/"><img
+                src="https://nectorplus.s3.ap-south-1.amazonaws.com/13c0c570-31bb-11ee-a0c0-ad1b782616cb-Linkedin.png"
+                alt=" img" height="20" width="20" /></a>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </center>
+</body>
+
+</html>

@@ -1,60 +1,221 @@
 const { Router } = require("express");
 const doctorController = require("./controller");
-const { validate, verifyAuthToken, isAdmin, isAdminCreator, isCreator, isDoctor } = require("../../../middlewares/index");
+const {
+  validate,
+  verifyAuthToken,
+  isAdmin,
+} = require("../../../middlewares/index");
 const schema = require("./schema");
-const { doctor } = require("../../../services");
 
 const router = Router({ mergeParams: true });
 
-router.get("/specialityFirstLetterList/:id", doctorController.specialityFirstLetterList);
 router.get(
-    "/admin",
-    // validate(schema.doctorList, 'query'),
-    doctorController.doctorList
-  );
-router.get("/speciality/:id", doctorController.doctorSpeciality);
+  "/get-all-top-rated-doctors",
+  doctorController.getAllTopRatedDoctors
+);
+
+router.get(
+  "/speciality-first-letter-list/:id",
+  doctorController.specialityFirstLetterList
+);
+
+router.get("/admin", doctorController.doctorList);
+
+router.get(
+  "/speciality/:id",
+  // validate(schema.doctorProfile, "query"),
+  doctorController.doctorSpeciality
+);
+
 router.get("/reviews/:id", doctorController.doctorReviews);
-router.get("/profile/:id", doctorController.doctorAboutUs);
-router.get("/establishmentProfile/:id", doctorController.doctorListBasedOnEstablishmentSpecility);
-router.get("/establishmentspecialityList/:id", doctorController.establishmentspecialityListDoc);
-router.get("/getAllDoctorsByCity", doctorController.getAllDoctorByCity);
-router.get("/getAllSpecializations", doctorController.getAllSpecializations);
-router.put(
-    "/doctorUpdateProfile",
-    verifyAuthToken,
-    validate(schema.doctorCompleteProfile),
-    doctorController.doctorUpdateProfile
+
+router.get(
+  "/profile",
+  validate(schema.doctorProfile, "query"),
+  doctorController.doctorAboutUs
 );
 
 router.get(
-    "/getDoctorProfile",
-    verifyAuthToken,
-    validate(schema.getDoctorProfile, 'query'),
-    doctorController.getDoctorProfile
+  "/establishment-profile/:id",
+  doctorController.doctorListBasedOnProcedure
 );
-router.post("/getCalender",verifyAuthToken, doctorController.getCalender);
-router.post("/doctorCancelAppointment", doctorController.doctorCancelAppointment); //validate(schema.cancelAppointment),
-router.post("/doctorCompleteAppointment", validate(schema.completeAppointment), doctorController.doctorCompleteAppointment);
-router.delete("/doctorDeleteAppointment",validate(schema.completeAppointment,'query'),doctorController.doctorDeleteAppointment);
-router.patch("/doctorEditAppointment",doctorController.doctorEditAppointment);
-router.get("/doctorEstablishmentList",verifyAuthToken, doctorController.doctorEstablishmentList);
-router.post("/doctorAddEstablishment",verifyAuthToken, doctorController.doctorAddEstablishment);
-router.get("/establishmentData",verifyAuthToken,doctorController.establishmentData);
-router.get("/doctorEstablishmentRequest",verifyAuthToken,validate(schema.commonList,'query'),doctorController.doctorEstablishmentRequest);
-router.put("/doctorEditEstablishment",verifyAuthToken,doctorController.doctorEditEstablishment);
-router.patch("/doctorAcceptEstablishment",verifyAuthToken, doctorController.doctorAcceptEstablishment);
-router.post("/doctorAppointmentDashboard",verifyAuthToken, doctorController.doctorAppointmentDashboard);
-router.get("/doctorAppointmentList",verifyAuthToken,validate(schema.doctorPatientList,'query'), doctorController.doctorAppointmentList);
-router.post("/getAllDoctors", doctorController.getAllDoctors);
-router.get("/getAllTopRatedDoctors", doctorController.getAllTopRatedDoctors);
-router.post("/adminAddDoctor",validate(schema.adminAddDoctor), verifyAuthToken,doctorController.adminAddDoctor); //,validate(schema.adminAddDoctor)
-router.get("/adminDoctorList",validate(schema.adminDoctorList,'query'),verifyAuthToken,doctorController.adminDoctorList);
-router.put("/adminEditDoctor", validate(schema.doctorId, 'query'),validate(schema.adminEditDoctor),verifyAuthToken,doctorController.adminEditDoctor); //,validate(schema.adminEditDoctor)
-router.get("/doctorApprovalList",validate(schema.commonList, 'query'),verifyAuthToken, doctorController.adminDoctorApprovalList);
-router.patch("/adminActionDoctor",validate(schema.doctorId, 'query'), validate(schema.adminActionDoctor),verifyAuthToken, doctorController.adminActionDoctor);
-router.patch("/adminActiveInactive", validate(schema.doctorId, 'query'), validate(schema.doctorStatus),verifyAuthToken, doctorController.adminActiveInactiveDoctor); //
-router.put("/deleteProfile", doctorController.deleteDocProfile);
 
+router.get(
+  "/establishment-speciality-list/:id",
+  doctorController.establishmentspecialityListDoc
+);
 
+router.get("/get-all-doctors-by-city", doctorController.getAllDoctorByCity);
+
+router.get("/get-all-specializations", doctorController.getAllSpecializations);
+
+router.put(
+  "/doctor-update-profile",
+  verifyAuthToken,
+  validate(schema.doctorCompleteProfile),
+  doctorController.doctorUpdateProfile
+);
+
+router.get(
+  "/get-doctor-profile",
+  verifyAuthToken,
+  validate(schema.getDoctorProfile, "query"),
+  doctorController.getDoctorProfile
+);
+
+router.post("/get-calender", verifyAuthToken, doctorController.getCalender);
+
+router.post(
+  "/doctor-cancel-appointment",
+  verifyAuthToken,
+  doctorController.doctorCancelAppointment
+);
+
+router.post(
+  "/doctor-complete-appointment",
+  verifyAuthToken,
+  validate(schema.completeAppointment),
+  doctorController.doctorCompleteAppointment
+);
+
+router.delete(
+  "/doctor-delete-appointment",
+  validate(schema.completeAppointment, "query"),
+  doctorController.doctorDeleteAppointment
+);
+
+router.patch(
+  "/doctor-edit-appointment",
+  verifyAuthToken,
+  doctorController.doctorEditAppointment
+);
+
+router.get(
+  "/doctor-establishment-list",
+  verifyAuthToken,
+  doctorController.doctorEstablishmentList
+);
+
+router.post(
+  "/doctor-add-establishment",
+  verifyAuthToken,
+  doctorController.doctorAddEstablishment
+);
+
+router.post(
+  "/check-duplicate-timings",
+  verifyAuthToken,
+  doctorController.checkDuplicateTimings
+);
+
+router.get(
+  "/establishment-data",
+  verifyAuthToken,
+  doctorController.establishmentDataDetails
+);
+
+router.get(
+  "/doctor-establishment-request",
+  verifyAuthToken,
+  validate(schema.commonList, "query"),
+  doctorController.doctorEstablishmentRequest
+);
+
+router.put(
+  "/doctor-edit-establishment",
+  verifyAuthToken,
+  doctorController.doctorEditEstablishment
+);
+
+router.patch(
+  "/doctor-accept-establishment",
+  verifyAuthToken,
+  doctorController.doctorAcceptEstablishment
+);
+
+router.post(
+  "/doctor-appointment-dashboard",
+  verifyAuthToken,
+  doctorController.doctorAppointmentDashboard
+);
+
+router.get(
+  "/doctor-appointment-list",
+  verifyAuthToken,
+  validate(schema.doctorPatientList, "query"),
+  doctorController.doctorAppointmentList
+);
+
+router.post("/get-all-doctors", doctorController.getAllDoctors);
+
+router.post(
+  "/admin-add-doctor",
+  verifyAuthToken,
+  isAdmin,
+  doctorController.adminAddDoctor
+);
+
+router.get(
+  "/admin-doctor-list",
+  verifyAuthToken,
+  isAdmin,
+  validate(schema.adminDoctorList, "query"),
+  doctorController.adminDoctorList
+);
+
+router.put(
+  "/admin-edit-doctor",
+  validate(schema.doctorId, "query"),
+  verifyAuthToken,
+  isAdmin,
+  doctorController.adminEditDoctor
+);
+
+router.get(
+  "/doctor-approval-list",
+  verifyAuthToken,
+  isAdmin,
+  validate(schema.commonList, "query"),
+  doctorController.adminDoctorApprovalList
+);
+
+router.patch(
+  "/admin-action-doctor",
+  verifyAuthToken,
+  isAdmin,
+  validate(schema.adminActionDoctor),
+  doctorController.adminActionDoctor
+);
+
+router.patch(
+  "/admin-active-inactive",
+  verifyAuthToken,
+  isAdmin,
+  validate(schema.doctorId, "query"),
+  validate(schema.doctorStatus),
+  doctorController.adminActiveInactiveDoctor
+);
+
+router.put(
+  "/delete-profile",
+  verifyAuthToken,
+  doctorController.deleteDocProfile
+);
+
+router.get("/procedure", verifyAuthToken, doctorController.procedureList);
+
+router.post(
+  "/procedure",
+  verifyAuthToken,
+  validate(schema.addProcedure),
+  doctorController.addProcedure
+);
+
+router.delete(
+  "/procedure/:recordId",
+  verifyAuthToken,
+  validate(schema.procedureByID, "params"),
+  doctorController.deleteProcedure
+);
 
 module.exports = router;

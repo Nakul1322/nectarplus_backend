@@ -1,4 +1,5 @@
 const { Schema } = require("mongoose");
+const { constants } = require("../utils/index");
 const db = require("../config/database").getUserDB();
 
 const videoSchema = new Schema(
@@ -8,11 +9,19 @@ const videoSchema = new Schema(
       ref: "users",
       // required: true,
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
     title: {
       type: String,
     },
     url: {
       type: String,
+    },
+    userType: {
+      type: Number,
+      enum: constants.USER_TYPES,
     },
   },
   {

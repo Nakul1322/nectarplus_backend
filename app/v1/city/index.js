@@ -5,26 +5,10 @@ const schema = require("./schema");
 
 const router = Router({ mergeParams: true });
 
-router.post(
-  "/",
-  // validate(schema.addCity),
-  cityController.addCity
-);
-router.get("/allCity", cityController.allCity); //
-router.get(
-  "/:id",
-  //  validate(schema.findCity),
-  cityController.findCity
-);
-router.put(
-  "/:id",
-  // validate(schema.updateCity),
-  cityController.updateCity
-); //,validate(schema.adminEditDoctor)
-router.delete(
-  "/:id",
-  // validate(schema.deleteCity),
-  cityController.deleteCity
-);
+router.post("/", cityController.addCity);
+router.get("/all-city", cityController.allCity);
+router.get("/:id", cityController.findCity);
+router.put("/:id", cityController.updateCity);
+router.delete("/:id", cityController.deleteCity);
 
 module.exports = router;

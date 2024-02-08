@@ -18,8 +18,6 @@ function createConnection(mongoUri) {
     useUnifiedTopology: true,
   });
 
-  // mongoose.set("useCreateIndex", true);
-
   connection.on("connected", () => {
     console.log(`Database connection is open to "${mongoUri}"`);
   });
@@ -29,7 +27,7 @@ function createConnection(mongoUri) {
   });
 
   connection.on("disconnected", () => {
-    console.log(`Database Connection to "${mongoUri}" is disconnected`);
+    console.log(`Database connection to "${mongoUri}" is disconnected`);
   });
 
   connections[mongoUri] = connection;

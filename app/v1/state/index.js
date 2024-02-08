@@ -5,26 +5,14 @@ const schema = require("./schema");
 
 const router = Router({ mergeParams: true });
 
-router.post(
-  "/",
-  // validate(schema.addState),
-  stateController.addState
-);
-router.get("/allState", stateController.allState); //
-router.get(
-  "/:id",
-  //  validate(schema.findState),
-  stateController.findState
-);
-router.put(
-  "/:id",
-  // validate(schema.updateState),
-  stateController.updateState
-); //,validate(schema.adminEditDoctor)
-router.delete(
-  "/:id",
-  // validate(schema.deleteState),
-  stateController.deleteState
-);
+router.post("/", stateController.addState);
+
+router.get("/all-state", stateController.allState); //
+
+router.get("/:id", stateController.findState);
+
+router.put("/:id", stateController.updateState);
+
+router.delete("/:id", stateController.deleteState);
 
 module.exports = router;

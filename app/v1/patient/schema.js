@@ -1,6 +1,15 @@
 const Joi = require("joi");
-const { constants } = require('../../../utils/constant');
-const { search, page, size, sort, sortOrder, _id, id, isExport } = require('../../../utils/validation');
+const { constants } = require("../../../utils/constant");
+const {
+  search,
+  page,
+  size,
+  sort,
+  sortOrder,
+  _id,
+  id,
+  isExport,
+} = require("../../../utils/validation");
 
 const patientList = Joi.object({
   bloodGroup: Joi.string().trim(),
@@ -12,17 +21,18 @@ const patientList = Joi.object({
   sort,
   sortOrder,
   isExport,
-  // type: Joi.number().default()
-})
+});
 
 const getPatientList = Joi.object({
-  type: Joi.number().valid(...Object.values(constants.DOCTOR_PATIENT_LIST)).required(),
+  type: Joi.number()
+    .valid(...Object.values(constants.DOCTOR_PATIENT_LIST))
+    .required(),
   search,
   page,
   size,
   sort,
-  sortOrder
-})
+  sortOrder,
+});
 
 const vitalSigns = Joi.object({
   weight: Joi.number().min(1),
@@ -40,115 +50,119 @@ const clinicalNotes = Joi.object({
   observations: Joi.string().trim(),
   diagnoses: Joi.string().trim(),
   notes: Joi.string().trim(),
-}).min(1)
-
-const medicine = Joi.array().items({
-  drugId: id,
-  dosageAndFrequency: Joi.object({
-    morning: Joi.number().min(0),
-    afternoon: Joi.number().min(0),
-    evening: Joi.number().min(0),
-  }),
-  intake: Joi.string().trim()
 }).min(1);
 
-const labTest = Joi.array().items({
-  labTestId: id,
-  instruction: Joi.string().trim(),
-  name: Joi.string().trim()
-}).min(1);
+const medicine = Joi.array()
+  .items({
+    drugId: id,
+    dosageAndFrequency: Joi.object({
+      morning: Joi.number().min(0),
+      afternoon: Joi.number().min(0),
+      evening: Joi.number().min(0),
+    }),
+    intake: Joi.string().trim(),
+  })
+  .min(1);
+
+const labTest = Joi.array()
+  .items({
+    labTestId: id,
+    instruction: Joi.string().trim(),
+    name: Joi.string().trim(),
+  })
+  .min(1);
 
 const files = Joi.array().items(Joi.string().trim().uri()).min(1);
 
 const getPatientRecord = Joi.object({
-  type: Joi.number().valid(...Object.values(constants.PATIENT_CLINICAL_RECORDS)).required(),
+  type: Joi.number()
+    .valid(...Object.values(constants.PATIENT_CLINICAL_RECORDS))
+    .required(),
 });
 
 const editPatientRecord = Joi.object({
-  type: Joi.number().valid(...Object.values(constants.PATIENT_CLINICAL_RECORDS)).required(),
+  type: Joi.number()
+    .valid(...Object.values(constants.PATIENT_CLINICAL_RECORDS))
+    .required(),
   isDeleted: Joi.boolean().valid(true),
-  records: Joi.any().
-    when('type',
-      {
-        is: constants.PATIENT_CLINICAL_RECORDS.VITAL_SIGNS,
-        then: vitalSigns
-      }).
-    when('type',
-      {
-        is: constants.PATIENT_CLINICAL_RECORDS.CLINICAL_NOTES,
-        then: clinicalNotes
-      }).
-    when('type',
-      {
-        is: constants.PATIENT_CLINICAL_RECORDS.MEDICINES,
-        then: medicine
-      }).
-    when('type',
-      {
-        is: constants.PATIENT_CLINICAL_RECORDS.LAB_TEST,
-        then: labTest
-      }).
-    when('type',
-      {
-        is: constants.PATIENT_CLINICAL_RECORDS.FILES,
-        then: files
-      })
+  records: Joi.any()
+    .when("type", {
+      is: constants.PATIENT_CLINICAL_RECORDS.VITAL_SIGNS,
+      then: vitalSigns,
+    })
+    .when("type", {
+      is: constants.PATIENT_CLINICAL_RECORDS.CLINICAL_NOTES,
+      then: clinicalNotes,
+    })
+    .when("type", {
+      is: constants.PATIENT_CLINICAL_RECORDS.MEDICINES,
+      then: medicine,
+    })
+    .when("type", {
+      is: constants.PATIENT_CLINICAL_RECORDS.LAB_TEST,
+      then: labTest,
+    })
+    .when("type", {
+      is: constants.PATIENT_CLINICAL_RECORDS.FILES,
+      then: files,
+    }),
 });
 
 const addPatientRecord = Joi.object({
-  type: Joi.number().valid(...Object.values(constants.PATIENT_CLINICAL_RECORDS)).required(),
-  records: Joi.any().required().
-    when('type',
-      {
-        is: constants.PATIENT_CLINICAL_RECORDS.VITAL_SIGNS,
-        then: vitalSigns
-      }).
-    when('type',
-      {
-        is: constants.PATIENT_CLINICAL_RECORDS.CLINICAL_NOTES,
-        then: clinicalNotes
-      }).
-    when('type',
-      {
-        is: constants.PATIENT_CLINICAL_RECORDS.MEDICINES,
-        then: medicine
-      }).
-    when('type',
-      {
-        is: constants.PATIENT_CLINICAL_RECORDS.LAB_TEST,
-        then: labTest
-      }).
-    when('type',
-      {
-        is: constants.PATIENT_CLINICAL_RECORDS.FILES,
-        then: files
-      }).required()
+  type: Joi.number()
+    .valid(...Object.values(constants.PATIENT_CLINICAL_RECORDS))
+    .required(),
+  records: Joi.any()
+    .required()
+    .when("type", {
+      is: constants.PATIENT_CLINICAL_RECORDS.VITAL_SIGNS,
+      then: vitalSigns,
+    })
+    .when("type", {
+      is: constants.PATIENT_CLINICAL_RECORDS.CLINICAL_NOTES,
+      then: clinicalNotes,
+    })
+    .when("type", {
+      is: constants.PATIENT_CLINICAL_RECORDS.MEDICINES,
+      then: medicine,
+    })
+    .when("type", {
+      is: constants.PATIENT_CLINICAL_RECORDS.LAB_TEST,
+      then: labTest,
+    })
+    .when("type", {
+      is: constants.PATIENT_CLINICAL_RECORDS.FILES,
+      then: files,
+    })
+    .required(),
 });
 
 const appointmentId = Joi.object({
   appointmentId: id,
-  patientId: id
+  patientId: id,
 });
 
 const patientId = Joi.object({
-  patientId: id
-})
+  patientId: id,
+});
 
 const editPatientData = Joi.object({
-  patientEmail: Joi.string().trim().email().lowercase(),
+  isDeleted: Joi.boolean().valid(true),
   bloodGroup: Joi.number().valid(...Object.values(constants.BLOOD_GROUP)),
   gender: Joi.number().valid(...Object.values(constants.GENDER)),
   dob: Joi.date().optional(),
   address: Joi.object({
     street: Joi.string().trim().min(3).max(250),
-    city: _id,
+    landmark: Joi.string().trim().min(3).max(250),
+    locality: Joi.string().trim(),
+    city: Joi.string().trim(),
     state: _id,
-    pincode: Joi.string()
-      .length(6)
-      .pattern(constants.REGEX_FOR_PINCODE)
-      .trim()
+    pincode: Joi.string().length(6).pattern(constants.REGEX_FOR_PINCODE).trim(),
+    country: Joi.string().trim().min(1).max(500).default("India"),
   }),
-  language: Joi.number().valid(...Object.values(constants.LANGUAGES_SUPPORTED))
+  fullName: Joi.string().trim(),
+  profilePic: Joi.string().trim().uri(),
+  language: Joi.number().valid(...Object.values(constants.LANGUAGES_SUPPORTED)),
 });
 
 const hospitalPatientList = Joi.object({
@@ -158,7 +172,66 @@ const hospitalPatientList = Joi.object({
   sort,
   sortOrder,
   isExport,
-})
+});
+
+const historyRecord = Joi.object({
+  search,
+  page,
+  size,
+  sort,
+  sortOrder,
+  patientId: id,
+});
+
+const recordId = Joi.object({
+  recordId: id,
+});
+
+const commonList = Joi.object({
+  search,
+  page,
+  size,
+  sort,
+  sortOrder,
+  isExport,
+});
+
+const feedbackList = Joi.object({
+  search,
+  page,
+  size,
+  sort,
+  sortOrder,
+  toDate: Joi.date().default(new Date(Date.now() + 730 * 24 * 60 * 60 * 1000)),
+  fromDate: Joi.date(),
+});
+
+const patientAppointmentList = Joi.object({
+  status: Joi.number().valid(
+    constants.BOOKING_STATUS.BOOKED,
+    constants.BOOKING_STATUS.COMPLETE,
+    constants.BOOKING_STATUS.CANCEL
+  ),
+  toDate: Joi.date().default(new Date(Date.now() + 60 * 24 * 60 * 60 * 1000)),
+  fromDate: Joi.date(),
+  patientId: id,
+});
+
+const hospitalAppointmentList = Joi.object({
+  search,
+  page,
+  size,
+  sort,
+  sortOrder,
+  isExport,
+  status: Joi.number().valid(...Object.values(constants.BOOKING_STATUS)),
+  doctorId: _id,
+  toDate: Joi.date().default(new Date(Date.now() + 60 * 24 * 60 * 60 * 1000)),
+  fromDate: Joi.date().default(new Date(Date.now())),
+  typeOfList: Joi.number()
+    .valid(...Object.values(constants.HOSPITAL_APPOINTMENT_LIST_TYPES))
+    .default(constants.HOSPITAL_APPOINTMENT_LIST_TYPES.UPCOMING),
+});
 
 module.exports = {
   patientList,
@@ -169,5 +242,11 @@ module.exports = {
   getPatientList,
   editPatientData,
   patientId,
-  hospitalPatientList
+  hospitalPatientList,
+  historyRecord,
+  recordId,
+  commonList,
+  feedbackList,
+  patientAppointmentList,
+  hospitalAppointmentList,
 };

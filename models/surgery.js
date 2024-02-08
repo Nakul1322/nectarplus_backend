@@ -1,42 +1,45 @@
 const { Schema } = require("mongoose");
-const { constants } = require('../utils/index')
+const { constants } = require("../utils/index");
 const db = require("../config/database").getUserDB();
 
 const surgerySchema = new Schema(
   {
     title: {
       type: String,
-      required: true
+      required: true,
     },
     seoTitle: [
       {
-        type: String
-      }
+        type: String,
+      },
     ],
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
     surgery: {
       type: String,
-      required: true
+      required: true,
     },
     description: {
       type: String,
-      required: true
+      required: true,
     },
     seoDescription: {
-      type: String
+      type: String,
     },
     status: {
       type: Number,
-      // enum: [0, 1], // 0: inActive, 1: active
-      default: 1
-    }
+      default: 1,
+    },
   },
   {
     timestamps: true,
-    versionKey: false
+    versionKey: false,
   }
 );
 
-const Surgery = db.model('Surgery', surgerySchema);
+const Surgery = db.model("Surgery", surgerySchema);
 
 module.exports = {
   model: Surgery,

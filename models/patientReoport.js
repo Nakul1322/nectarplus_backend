@@ -1,5 +1,4 @@
 const { Schema } = require("mongoose");
-const { constants } = require("../utils/index");
 const db = require("../config/database").getUserDB();
 
 const patientsReportsSchema = new Schema(
@@ -8,22 +7,23 @@ const patientsReportsSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: "User",
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
     title: {
-        type: String,
-        // required: true,
-      },
+      type: String,
+    },
     name: {
-        type: String,
-        // required: true,
-      },
+      type: String,
+    },
     type: {
       type: String,
       enum: ["Reports", "Prescription", "Invoice"],
     },
     fileUrl: {
-        type: String,
-        // required: true,
-      },
+      type: String,
+    },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: "User",

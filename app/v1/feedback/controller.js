@@ -1,8 +1,16 @@
 const httpStatus = require("http-status");
 const { response } = require("../../../utils/index");
-const { common } = require("../../../services/index");
-const { Feedback, MasterFeedback } = require("../../../models/index");
+const { common, adminService } = require("../../../services/index");
+const {
+  Feedback,
+  MasterFeedback,
+  Patient,
+  AppointmentFeedback,
+  Notification
+} = require("../../../models/index");
 const { constants } = require("../../../utils/constant");
+const { Types } = require("mongoose");
+const { ObjectId } = require("mongoose").Types;
 
 const addMasterFeedback = async (req, res) => {
   try {
@@ -14,7 +22,7 @@ const addMasterFeedback = async (req, res) => {
       httpStatus.OK
     );
   } catch (error) {
-    console.log("🚀 ~ file: controller.js ~ line 301 ~ login ~ error", error);
+    console.log(error);
     return response.error(
       { msgCode: "INTERNAL_SERVER_ERROR" },
       res,
@@ -32,7 +40,7 @@ const allMasterFeedback = async (req, res) => {
       httpStatus.OK
     );
   } catch (error) {
-    console.log("🚀 ~ file: controller.js ~ line 301 ~ login ~ error", error);
+    console.log(error);
     return response.error(
       { msgCode: "INTERNAL_SERVER_ERROR" },
       res,
@@ -52,7 +60,7 @@ const updateMasterFeedback = async (req, res) => {
       httpStatus.OK
     );
   } catch (error) {
-    console.log("🚀 ~ file: controller.js ~ line 301 ~ login ~ error", error);
+    console.log(error);
     return response.error(
       { msgCode: "INTERNAL_SERVER_ERROR" },
       res,
@@ -71,7 +79,7 @@ const deleteMasterFeedback = async (req, res) => {
       httpStatus.OK
     );
   } catch (error) {
-    console.log("🚀 ~ file: controller.js ~ line 301 ~ login ~ error", error);
+    console.log(error);
     return response.error(
       { msgCode: "INTERNAL_SERVER_ERROR" },
       res,
@@ -90,7 +98,7 @@ const findMasterFeedback = async (req, res) => {
       httpStatus.OK
     );
   } catch (error) {
-    console.log("🚀 ~ file: controller.js ~ line 301 ~ login ~ error", error);
+    console.log(error);
     return response.error(
       { msgCode: "INTERNAL_SERVER_ERROR" },
       res,
@@ -102,15 +110,65 @@ const findMasterFeedback = async (req, res) => {
 //******************************************************   FEEDBACK MODULE  ***********************************************************************/
 const addFeedback = async (req, res) => {
   try {
+    const { userId } = req.data;
     const content = req.body;
-    const data = await common.create(Feedback.model, content);
+    // Add points for each experience option
+    const pointsMapping = {
+      Yes: 1,
+      "Less than 15 minutes": 1,
+      "15-30 minutes": 0.75,
+      "30-45 minutes": 0.5,
+      "More than 1 hour": 1,
+      "Doctor friendliness": 0.25,
+      "Explanation of the health issue": 0.25,
+      "Treatment satisfaction": 0.25,
+      "Value for money": 0.25,
+      Excellent: 1,
+      Good: 0.75,
+      "Not Good": 0.5,
+      "Very Bad": 0.25,
+      // Add other options mapping here
+    };
+    content.experience = content.experience.map((exp) => {
+      if (exp.questionNo === 5) {
+        let point = 0;
+        exp.option.map((options) => {
+          point += pointsMapping[options] || 0;
+        });
+        return { ...exp, point };
+      } else {
+        const point = pointsMapping[exp.option] || 0;
+        return { ...exp, point };
+      }
+    });
+    // Calculate total points
+    content.totalPoint = content.experience.reduce(
+      (total, exp) => total + exp.point,
+      0
+    );
+    content.anonymous = content?.anonymous === "" ? false : content?.anonymous;
+    const findPatient = await Patient.model.findOne({
+      userId: new Types.ObjectId(userId),
+    });
+    content.patientId = findPatient?._id || null;
+    const data = await common.create(AppointmentFeedback.model, content);
+    const superadminArray = await adminService.superAdminList();
+    await common.create(Notification.model, {
+      userType: constants.USER_TYPES.ADMIN,
+      eventType: constants.NOTIFICATION_TYPE.FEEDBACK_GIVEN_PATIENT,
+      senderId: new ObjectId(userId),
+      receiverId: superadminArray,
+      title: constants.MESSAGES.FEEDBACK_GIVEN_PATIENT.TITLE,
+      body: constants.MESSAGES.FEEDBACK_GIVEN_PATIENT.BODY,
+    });
+    // shoot email using 3rd party service to doctor's email , and sms.
     return response.success(
       { msgCode: "FEEDBACK_ADDED", data },
       res,
       httpStatus.OK
     );
   } catch (error) {
-    console.log("🚀 ~ file: controller.js ~ line 301 ~ login ~ error", error);
+    console.log(error);
     return response.error(
       { msgCode: "INTERNAL_SERVER_ERROR" },
       res,
@@ -128,7 +186,7 @@ const allFeedback = async (req, res) => {
       httpStatus.OK
     );
   } catch (error) {
-    console.log("🚀 ~ file: controller.js ~ line 301 ~ login ~ error", error);
+    console.log(error);
     return response.error(
       { msgCode: "INTERNAL_SERVER_ERROR" },
       res,
@@ -148,7 +206,7 @@ const updateFeedback = async (req, res) => {
       httpStatus.OK
     );
   } catch (error) {
-    console.log("🚀 ~ file: controller.js ~ line 301 ~ login ~ error", error);
+    console.log(error);
     return response.error(
       { msgCode: "INTERNAL_SERVER_ERROR" },
       res,
@@ -167,7 +225,7 @@ const deleteFeedback = async (req, res) => {
       httpStatus.OK
     );
   } catch (error) {
-    console.log("🚀 ~ file: controller.js ~ line 301 ~ login ~ error", error);
+    console.log(error);
     return response.error(
       { msgCode: "INTERNAL_SERVER_ERROR" },
       res,
@@ -186,7 +244,7 @@ const findFeedback = async (req, res) => {
       httpStatus.OK
     );
   } catch (error) {
-    console.log("🚀 ~ file: controller.js ~ line 301 ~ login ~ error", error);
+    console.log(error);
     return response.error(
       { msgCode: "INTERNAL_SERVER_ERROR" },
       res,

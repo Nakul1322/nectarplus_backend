@@ -7,8 +7,8 @@ const patientSchema = new Schema(
     steps: {
       type: Number,
       enum: constants.PROFILE_STEPS,
-      default: constants.PROFILE_STEPS.COMPLETED
-    },    
+      default: constants.PROFILE_STEPS.COMPLETED,
+    },
     isVerified: {
       type: Number,
       enum: constants.PROFILE_STATUS,
@@ -25,48 +25,50 @@ const patientSchema = new Schema(
     },
     email: {
       type: String,
-      // required: true,
       default: null,
     },
     gender: {
-        type: Number,
-        enum: constants.GENDER,
-        default: constants.GENDER.MALE,
-      },
+      type: Number,
+      enum: constants.GENDER,
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
     dob: {
       type: Date,
       // required: true,
       default: null,
     },
     bloodGroup: {
-        type: Number,
-        enum: constants.BLOOD_GROUP,
-        default: null,
-      },
+      type: Number,
+      enum: constants.BLOOD_GROUP,
+      default: null,
+    },
     address: {
       houseNo: {
         type: String,
-        // required: true,
         default: null,
       },
       landmark: {
         type: String,
-        // required: true,
+        default: null,
+      },
+      locality: {
+        type: String,
         default: null,
       },
       city: {
         type: String,
-        // required: true,
         default: null,
       },
       state: {
         type: Schema.Types.ObjectId,
-        ref: "State",
+        ref: "statemasters",
         default: null,
       },
       pincode: {
         type: String,
-        // required: true,
         default: null,
       },
       country: {
@@ -75,10 +77,9 @@ const patientSchema = new Schema(
       },
     },
     profilePic: {
-        type: String,
-        // required: true,
-        default: null,
-      },
+      type: String,
+      default: null,
+    },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: "users",

@@ -1,5 +1,6 @@
 const { Schema } = require("mongoose");
 const db = require("../config/database").getUserDB();
+const { constants } = require("../utils/index");
 
 const hospitalTypeSchema = new Schema(
   {
@@ -10,6 +11,10 @@ const hospitalTypeSchema = new Schema(
     active: {
       type: Boolean,
       default: true,
+    },
+    category: {
+      type: Number,
+      enum: constants.HOSPITAL_TYPE_CATEGORY,
     },
   },
   {

@@ -5,24 +5,37 @@ const specializationSchema = new Schema(
   {
     name: {
       type: String,
-      required: true,
+    },
+    description: {
+      type: String,
+    },
+    links: {
+      type: String,
     },
     status: {
       type: Number,
-      required: true,
-      default: true,
+      default: 1,
     },
-    image:{
+    slug: {
       type: String,
-      required: true,
+    },
+    image: {
+      type: String,
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
     },
     createdBy: {
       type: Schema.Types.ObjectId,
-      ref: "users", // reference the users collection
+      ref: "users",
     },
     modifiedBy: {
       type: Schema.Types.ObjectId,
-      ref: "users", // reference the users collection
+      ref: "users",
+    },
+    slug: {
+      type: String,
     },
   },
   {

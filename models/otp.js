@@ -10,13 +10,17 @@ const otpSchema = new Schema(
     },
     phone: {
       type: String,
-      required: true,
     },
-    userType: {
-      type: Number,
-      enum: constants.USER_TYPES,
-      default: constants.USER_TYPES.PATIENT,
+    email: {
+      type: String,
     },
+    userType: [
+      {
+        type: Number,
+        enum: constants.USER_TYPES,
+        default: constants.USER_TYPES.PATIENT,
+      },
+    ],
     expiresAt: {
   type: Date,
   default: () => new Date(Date.now() + 600000),

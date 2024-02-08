@@ -4,7 +4,6 @@ const httpStatus = require("http-status");
 const validate =
   (schema, source = "body") =>
     async (req, res, next) => {
-      // let schemaValue = schema;
       const data = req[source];
       const { value, error } = await schema.validate(data, {
         abortEarly: false, // include all errors
@@ -18,7 +17,7 @@ const validate =
         const { details } = error;
         const message = details.map((i) => i.message).join(",");
         return response.error(
-          { msgCode: "VALIDATION_ERROR", data: message },
+          { msgCode: "VALIDATION_ERROR", data: { message, joiError: true }  },
           res,
           httpStatus.BAD_REQUEST
         );

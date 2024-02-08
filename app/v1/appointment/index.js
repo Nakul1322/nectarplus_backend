@@ -1,65 +1,77 @@
 const { Router } = require("express");
 const appointmentController = require("./controller");
-const { validate, isAdmin, verifyAuthToken, } = require("../../../middlewares");
+const { validate, verifyAuthToken, isAdmin } = require("../../../middlewares");
 const schema = require("./schema");
 
 const router = Router({ mergeParams: true });
 
 router.get(
+  "/appointment-history",
+  validate(schema.appointmentHistory, "query"),
+  verifyAuthToken,
+  appointmentController.appointmentHistory
+);
+
+router.post(
   "/list",
-  // isAdmin,
-  validate(schema.appointmentList, 'query'),
+  verifyAuthToken,
+  isAdmin,
+  validate(schema.appointmentList, "query"),
+  validate(schema.appointmentListFilterForExport),
   appointmentController.appointmentList
 );
 
 router.get(
-  "/getAllAppointmentFeedbacks",
-  //validate(schema.appointmentList, 'query'),
+  "/get-all-appointment-feedbacks",
   appointmentController.getAllAppointmentFeedbacks
 );
 
 router.get(
-  "/:doctorId",
-  //validate(schema.appointmentList, 'query'),
+  "/available-slots",
+  validate(schema.availableSlots, "query"),
   appointmentController.bookedSlots
 );
 
 router.get(
-  "/findAppointment/:id",
-  //validate(schema.appointmentList, 'query'),
-  // verifyAuthToken,
+  "/find-appointment/:id",
+  verifyAuthToken,
   appointmentController.findAppointment
 );
 
 router.get(
-  "/myAppointments/:id",
-  //validate(schema.appointmentList, 'query'),
+  "/my-appointments/:id",
+  verifyAuthToken,
   appointmentController.myAppointments
 );
 
 router.get(
-  "/appointmentReschedulingStatus/:id",
-  //validate(schema.appointmentList, 'query'),
+  "/appointment-rescheduling-status/:id",
+  verifyAuthToken,
   appointmentController.appointmentRescheduleStatus
 );
 
 router.post(
-  "/appointmentRescheduling/:id",
-  //validate(schema.appointmentList, 'query'),
+  "/appointment-rescheduling/:id",
+  verifyAuthToken,
   appointmentController.appointmentReschedule
 );
 
 router.put(
-  "/appointmentCancellation/:id",
-  //validate(schema.appointmentList, 'query'),
+  "/appointment-cancellation/:id",
+  verifyAuthToken,
   appointmentController.appointmentCancellation
 );
 
 router.post(
-  "/bookAppointment",
-  //validate(schema.appointmentList, 'query'),
+  "/book-appointment",
   verifyAuthToken,
   appointmentController.bookAppointment
+);
+
+router.get(
+  "/available-slots-count",
+  validate(schema.availableSlotsCount, "query"),
+  appointmentController.bookedSlotsCount
 );
 
 module.exports = router;

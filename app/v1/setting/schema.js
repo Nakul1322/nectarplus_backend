@@ -4,7 +4,7 @@ const { id, _id } = require('../../../utils/validation');
 
 const editDoctorProfile = Joi.object({
 	fullName: Joi.string().trim().min(3).max(50),
-	about: Joi.string().trim().min(5).max(500),
+	about: Joi.string().trim().min(1).max(2000),
 	experience: Joi.number().min(1).max(100),
 	profilePic: Joi.string().trim().uri(),
 	specialization: Joi.array().items(_id).min(1),

@@ -1,9 +1,11 @@
 const { v4: uuidv4 } = require("uuid");
 const { ObjectId } = require("mongoose").Types;
 const { constants } = require("./constant");
-const crypto = require("crypto");
 const moment = require("moment");
 const ExcelJS = require("exceljs");
+const { Readable } = require("stream");
+const bcrypt = require('bcrypt');
+let saltRounds = 10;
 
 const genUUID = () => {
   const uuid = uuidv4();
@@ -11,9 +13,9 @@ const genUUID = () => {
 };
 
 const generateOtp = (digit) => {
-  const max = 10 ** digit - 1;
-  const randomBytes = crypto.randomBytes(Math.ceil(digit / 2));
-  const otp = parseInt(randomBytes.toString("hex"), 16) % max;
+  const otp = Math.floor(
+      10 ** (digit - 1) + Math.random() * (10 ** (digit - 1) * 9)
+  );
   return otp;
 };
 
@@ -23,13 +25,27 @@ const filterFormatter = (filter, type = 1, recordKey = '') => {
   if (type === 2) { 
     filter.split(",").map((filter) => { 
     const queryObject = {};
-    const filterKey = "/" + filter + "/i"
     queryObject[`${recordKey}`] = { $regex: new RegExp(`^${filter}$`, 'i') };
     filterQuery.push(queryObject); 
     })
   };
   return filterQuery;
 };
+
+const objectIdFormatter = (filter, type = 1, recordKey = '') => {
+  const filterQuery = [];
+  if (type === 1) filter.map((filterData) => filterQuery.push(new ObjectId(filterData)));
+  if (type === 2) { 
+    filter.map((filterData) => { 
+    const queryObject = {};
+    const filterKey = "/" + filterData + "/i"
+    queryObject[`${recordKey}`] = { $regex: new RegExp(`^${filterKey}$`, 'i') };
+    filterQuery.push(queryObject); 
+    })
+  }
+  return filterQuery;
+};
+
 
 const getPagination = (page, size) => {
   const limit = isNaN(parseInt(size)) ? 10 : parseInt(size);
@@ -105,44 +121,63 @@ const convertToUTCTimestamp = (dateString, timeString) => {
   return date.toISOString();
 };
 
-const readExcelFile = async (filePath, fileName, type) => {
+const readExcelFile = async (fileBuffer, fileName, type) => {
   let headers;
-  console.log(filePath, fileName);
   const workbook = new ExcelJS.Workbook();
   const fileExtension = fileName.split(".").pop();
-  console.log(fileExtension);
-
+  const readableStream = new Readable({
+    read() {
+      this.push(fileBuffer);
+      this.push(null);
+    },
+  });
   if (fileExtension === "csv") {
-    await workbook.csv.readFile(filePath);
+    await workbook.csv.read(readableStream);
   } else if (fileExtension === "xlsx") {
-    await workbook.xlsx.readFile(filePath);
+    await workbook.xlsx.read(readableStream);
   } else {
-    throw new Error("Unsupported file format");
+    return false;
   }
-
   const worksheet = workbook.getWorksheet(1);
   const rows = [];
-
   // Define headers for each column in the Excel file
   if ((type === 1)) {
     headers = [
-      "Image",
+      "HospitalType",
       "Name",
-      "Specialization",
+      "Street",
       "Locality",
-      "Degree",
-      "Mobile",
-      "Email",
+      "City",
+      "Phone",
+      "State",
+      "Pincode",
+      "Country",
+      "ChangePhone"
     ];
   }
   if ((type === 2)) {
     headers = [
-      "Image",
       "Name",
-      "Type of Hospital",
+      "Phone",
+      "Specialization",
+      "Gender",
+      "RegistrationNumber",
+      "RegistrationCouncil",
+      "RegistrationYear",
+      "Degree",
+      "College",
+      "YearOfCompletion",
+      "Experience",
+      "Owner",
+      "EstablishmentName",
+      "HospitalType",
+      "Street",
       "Locality",
-      "Total Doctors",
-      "Mobile",
+      "City",
+      "State",
+      "Pincode",
+      "Country",
+      "ChangePhone"
     ];
   }
 
@@ -161,6 +196,20 @@ const readExcelFile = async (filePath, fileName, type) => {
   return rows;
 };
 
+const generateHash = async (password) => {
+  try {
+    saltRounds = parseInt(saltRounds);
+    const salt = bcrypt.genSaltSync(saltRounds);
+    const hash = bcrypt.hashSync(password.toString(), salt);
+    return hash;
+  } catch (err) {
+    return err;
+  }
+};
+// you can compare hash otp by below function
+const comparePassword = (password, hash) =>
+  bcrypt.compareSync(password, hash);
+
 module.exports = {
   genUUID,
   generateOtp,
@@ -172,4 +221,7 @@ module.exports = {
   getBloodGroup,
   convertToUTCTimestamp,
   readExcelFile,
+  objectIdFormatter,
+  generateHash,
+  comparePassword
 };

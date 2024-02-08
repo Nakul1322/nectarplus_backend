@@ -1,100 +1,90 @@
 const { Router } = require("express");
 const controller = require("./controller");
-const { validate } = require("../../../middlewares/index");
+const {
+  validate,
+  verifyAuthToken,
+  isAdmin,
+} = require("../../../middlewares/index");
 const schema = require("./schema");
 
 const router = Router({ mergeParams: true });
 
 router.post(
   "/",
+  verifyAuthToken,
+  isAdmin,
+  validate(schema.addMasterData),
   controller.addMaster
-); // add master data
+);
 
 router.get(
-  "/hospital-type", 
-  validate(schema.masterListData, 'query'),
+  "/hospital-type",
+  validate(schema.masterListData, "query"),
   controller.getAllMasterData
-); // get list of all master data
+);
 
 router.get(
-  "/state", 
-  validate(schema.masterListData, 'query'),
+  "/state",
+  validate(schema.masterListData, "query"),
   controller.getAllMasterData
-); // get list of all master data
+);
 
 router.get(
-  "/city", 
-  validate(schema.masterListData, 'query'),
+  "/procedure",
+  validate(schema.masterListData, "query"),
   controller.getAllMasterData
-); // get list of all master data
+);
 
 router.get(
-  "/procedure", 
-  validate(schema.masterListData, 'query'),
+  "/surgery",
+  validate(schema.masterListData, "query"),
   controller.getAllMasterData
-); // get list of all master data
+);
 
 router.get(
-  "/speciality", 
-  validate(schema.masterListData, 'query'),
+  "/social-media",
+  validate(schema.masterListData, "query"),
   controller.getAllMasterData
-); // get list of all master data
+);
 
 router.get(
-  "/degree", 
-  validate(schema.masterListData, 'query'),
+  "/specialization",
+  validate(schema.masterListData, "query"),
   controller.getAllMasterData
-); // get list of all master data
+);
 
-router.get(
-  "/college", 
-  validate(schema.masterListData, 'query'),
-  controller.getAllMasterData
-); // get list of all master data
-
-router.get(
-  "/surgery", 
-  validate(schema.masterListData, 'query'),
-  controller.getAllMasterData
-); // get list of all master data
-
-router.get(
-  "/social-media", 
-  validate(schema.masterListData, 'query'),
-  controller.getAllMasterData
-); // get list of all master data
-
-router.get(
-  "/specialization", 
-  validate(schema.masterListData, 'query'),
-  controller.getAllMasterData
-); // get list of all master data
-
-router.get(
-  "/", 
-  validate(schema.masterList, 'query'),
-  controller.getAllMasterDataList
-); // get list of all master data
+router.get("/little-critical-issue", controller.littleToCriticalIssueList);
 
 router.get(
   "/:id",
-   validate(schema.recordId, 'params'),
-   validate(schema.masterData, 'query'),
-   controller.getMasterDataByID
-); // get by ID
+  validate(schema.recordId, "params"),
+  validate(schema.masterData, "query"),
+  controller.getMasterDataByID
+);
 
 router.put(
   "/:id",
-  validate(schema.recordId, 'params'),
-  validate(schema.masterData, 'query'),
+  verifyAuthToken,
+  isAdmin,
+  validate(schema.recordId, "params"),
+  validate(schema.masterData, "query"),
   controller.updateMaster
-); // update by ID
+);
 
 router.delete(
   "/:id",
-  validate(schema.recordId, 'params'),
-  validate(schema.masterData, 'query'),
+  verifyAuthToken,
+  isAdmin,
+  validate(schema.recordId, "params"),
+  validate(schema.masterData, "query"),
   controller.deleteMaster
-); // delete by ID
+);
+
+router.post(
+  "/generate-slug",
+  verifyAuthToken,
+  isAdmin,
+  controller.generateSlug
+);
 
 module.exports = router;

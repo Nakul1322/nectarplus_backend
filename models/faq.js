@@ -18,6 +18,10 @@ const faqSchema = new Schema(
       default: constants.USER_TYPES.PATIENT,
       required: true,
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
     userId: {
       type: Schema.Types.ObjectId,
       ref: "users", // reference the users collection,

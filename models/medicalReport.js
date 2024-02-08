@@ -3,13 +3,16 @@ const db = require("../config/database").getUserDB();
 
 const medicalReportsSchema = new Schema(
   {
-    url: {
-      type: String,
-      required: true,
-    },
+    url: [
+      {
+        url: { type: String, required: true },
+        status: { type: Number, default: 0 },
+        fileType: { type: String }
+      },
+    ],
     userId: {
       type: Schema.Types.ObjectId,
-      ref: "User",
+      ref: "users",
       required: true,
     },
     title: {
@@ -26,13 +29,16 @@ const medicalReportsSchema = new Schema(
     },
     status: {
       type: Number,
-      // enum: [0, 1, 2, 3],
       default: 0,
     },
     type: {
       type: Number,
-      // enum: [0, 1, 2],
       default: 0,
+    },
+    doctorId: {
+      type: Schema.Types.ObjectId,
+      ref: "doctors",
+      default: null,
     },
   },
   {

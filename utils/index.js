@@ -1,4 +1,3 @@
-const sendEmail = require("./email");
 const {
   genUUID,
   generateOtp,
@@ -6,20 +5,18 @@ const {
   getSort,
   getSearch,
   getAgeGroup,
-  getBloodGroup
-  // userAggregation,
-  // choiceAggregation,
-  // statAggregation,
-  // choiceAggre
+  getBloodGroup,
+  generateHash,
+  comparePassword
 } = require("./helper");
 const helperPassword = require("./password");
 const response = require("./response");
 const { constants } = require('./constant');
-const imageUpload = require('./imageUpload')
-const sendOTP = require('./sendOTP')
+const imageUpload = require('./imageUpload');
+const sendSms = require("./sendSms");
+const sendEmail = require("./sendEmail");
 
 module.exports = {
-  sendEmail,
   genUUID,
   generateOtp,
   getPagination,
@@ -27,13 +24,12 @@ module.exports = {
   getSearch,
   getBloodGroup,
   getAgeGroup,
-  // userAggregation,
-  // choiceAggregation,
-  // statAggregation,
   imageUpload,
-  // choiceAggre,
-  sendOTP,
   helperPassword,
   response,
-  constants
+  constants,
+  sendSms,
+  sendEmail,
+  generateHash,
+  comparePassword
 };

@@ -20,17 +20,23 @@ const appointmentFeedbackSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: "establishmentmasters",
       // required: true,
-  },
+    },
+    anonymous: {
+      type: Boolean,
+      default: false,
+    },
     experience: [
       {
         questionNo: {
           type: Number,
           // required: true,
         },
-        option: {
-          type: String,
-          // required: true,
-        },
+        option: [
+          {
+            type: String,
+            // required: true,
+          },
+        ],
         point: {
           type: Number,
           // required: true,
@@ -39,10 +45,7 @@ const appointmentFeedbackSchema = new Schema(
     ],
     treatment: [
       {
-        name: {
-          type: String,
-          // required: true,
-        }
+        type: String,
       },
     ],
     totalPoint: {
@@ -58,10 +61,14 @@ const appointmentFeedbackSchema = new Schema(
       // required: true,
     },
     status: {
-        type: Number,
-        enum: constants.STATUS,
-        default: constants.STATUS.PENDING,
-      },
+      type: Number,
+      enum: constants.PROFILE_STATUS,
+      default: constants.PROFILE_STATUS.PENDING,
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: "User",

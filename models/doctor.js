@@ -6,13 +6,12 @@ const doctorSchema = new Schema(
   {
     userId: {
       type: Schema.Types.ObjectId,
-      ref: "users", // reference the users collection
+      ref: "users",
     },
     specialization: [
       {
         type: Schema.Types.ObjectId,
         ref: "specializations",
-        default: null, // reference the specializations collection
       },
     ],
     email: {
@@ -22,11 +21,14 @@ const doctorSchema = new Schema(
     gender: {
       type: Number,
       enum: constants.GENDER,
-      default: constants.GENDER.MALE,
     },
     city: {
       type: String,
       default: null,
+    },
+    isOwnEstablishment: {
+      type: Boolean,
+      default: false,
     },
     medicalRegistration: [
       {
@@ -72,17 +74,18 @@ const doctorSchema = new Schema(
       },
     ],
     membership: [
-  {    
-  name:  {
-        type: String,
-        default: null,
-      }},
+      {
+        name: {
+          type: String,
+          default: null,
+        },
+      },
     ],
     social: [
       {
         socialMediaId: {
           type: Schema.Types.ObjectId,
-          ref: 'socialmedias',
+          ref: "socialmedias",
           default: null,
         },
         url: {
@@ -103,26 +106,30 @@ const doctorSchema = new Schema(
       type: String,
       default: null,
     },
-    identityProof: [{
-      url: {
-      type: String,
-      default: null
+    identityProof: [
+      {
+        url: {
+          type: String,
+          default: null,
+        },
+        fileType: {
+          type: String,
+          default: null,
+        },
       },
-      fileType: {
-        type: String,
-        default: null
-      }
-    }],
-    medicalProof: [{
-      url: {
-      type: String,
-      default: null
+    ],
+    medicalProof: [
+      {
+        url: {
+          type: String,
+          default: null,
+        },
+        fileType: {
+          type: String,
+          default: null,
+        },
       },
-      fileType: {
-        type: String,
-        default: null
-      }
-    }],
+    ],
     profilePic: {
       type: String,
       default: null,
@@ -135,17 +142,29 @@ const doctorSchema = new Schema(
       type: String,
       default: null,
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
+    totalreviews: {
+      type: Number,
+      default: 0,
+    },
     rating: {
       type: Number,
-      default: null,
+      default: 0,
     },
     recommended: {
       type: Number,
-      default: null,
+      default: 0,
+    },
+    waitTime: {
+      type: Number,
+      default: 0,
     },
     createdBy: {
       type: Schema.Types.ObjectId,
-      ref: "users", // reference the users collection
+      ref: "users",
     },
     status: {
       type: Number,
@@ -159,24 +178,58 @@ const doctorSchema = new Schema(
     },
     rejectReason: {
       type: String,
-      // required: true,
     },
     steps: {
       type: Number,
       enum: constants.PROFILE_STEPS,
-      default: constants.PROFILE_STEPS.SECTION_A
+      default: constants.PROFILE_STEPS.SECTION_A,
     },
     profileScreen: {
       type: Number,
       enum: constants.DOCTOR_SCREENS,
-      default: constants.DOCTOR_SCREENS.DOCTOR_DETAILS
-    }
+      default: constants.DOCTOR_SCREENS.DOCTOR_DETAILS,
+    },
+    procedure: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "proceduremasters",
+      },
+    ],
+    profileSlug: {
+      type: String,
+    },
   },
   {
     timestamps: true,
     versionKey: false,
   }
 );
+
+// doctorSchema.pre("save", async function (next) {
+//   if (!this.isNew && (this.name || this.address.address)) {
+//     const condition = this._conditions;
+//     const establishmentMaster = await this.constructor.findOne(condition);
+//     const slugStr =
+//       (this.name || establishmentMaster.name) +
+//       (this.address.locality || establishmentMaster.address.locality);
+//     const baseSlug = slugify(slugStr, { lower: true });
+//     let slug = baseSlug;
+//     let slugCount = 1;
+
+//     while (true) {
+//       const existingEstablishment = await this.constructor.findOne({
+//         profileSlug: slug,
+//       });
+//       if (!existingEstablishment) {
+//         this.profileSlug = slug;
+//         break;
+//       }
+//       slug = `${baseSlug}-${slugCount}`;
+//       slugCount++;
+//     }
+//   }
+//   next();
+// });
 
 const Doctor = db.model("doctors", doctorSchema);
 

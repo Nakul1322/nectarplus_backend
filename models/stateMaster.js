@@ -5,13 +5,11 @@ const db = require("../config/database").getUserDB();
 const stateMasterSchema = new Schema(
   {
     code: {
-        type: String,
-        // required: true,
-      },
+      type: String,
+    },
     name: {
-        type: String,
-        // required: true,
-      },
+      type: String,
+    },
     status: {
       type: Number,
       enum: constants.STATUS, // 0-In-Active, 1-Active

@@ -11,7 +11,7 @@ const successMessage = {
     HOSPITAL_DATA: "Hospital data fetched successfully.",
     HOSPITAL_ADDED: "Hospital added successfully.",
     HOSPITAL_UPDATED: "Hospital updated successfully.",
-    HOSPITAL_STATUS_UPDATED:"Hospital status updated successfully.",
+    HOSPITAL_STATUS_UPDATED: "Hospital status updated successfully.",
     DATA_CREATED: "Data successfully created.",
     DOCTOR_STATUS_UPDATED: "Doctor status successfully updated.",
     DATA_UPDATE: "Data successfully updated.",
@@ -26,9 +26,7 @@ const successMessage = {
     FAQ_FOUND: "FAQ found.",
     FEEDBACK_ADDED: "Feedback added successfully.",
     FEEDBACK_UPDATED: "Feedback updated successfully.",
-    FEEDBACK_DELETED: "Feedback deleted successfully.",
     FEEDBACK_FOUND: "Feedback found successfully.",
-    FEEDBACK_LIST: "Feedback list.",
     MASTER_FEEDBACK_ADDED: "Master feedback added successfully.",
     MASTER_FEEDBACK_UPDATED: "Master feedback updated successfully.",
     MASTER_FEEDBACK_DELETED: "Master feedback deleted successfully.",
@@ -37,7 +35,8 @@ const successMessage = {
     ACCOUNT_DATA: "Account data found successfully.",
     ACCOUNT_UPDATED: "Account updated successfully.",
     EDUCATION_DATA: "Education data found successfully.",
-    AWARDS_AND_RECOGNITION_DATA: "Awards and recognition data found successfully.",
+    AWARDS_AND_RECOGNITION_DATA:
+      "Awards and recognition data found successfully.",
     MEDICAL_REGISTRATION_DATA: "Medical registration data found successfully.",
     DELETE_SUCCESS: "Delete operation executed successfully.",
     UPDATE_SUCCESS: "Update operation executed successfully.",
@@ -57,17 +56,18 @@ const successMessage = {
     VIDEOS_DATA: "Video list found successfully.",
     PROFILE_DELETED_SUCCESSFUL: "Account deleted successfully",
     DOCTOR_UPDATED: "Doctor updated successfully.",
-    DOCTOR_LIST:"Doctor data found successfully",
+    DOCTOR_LIST: "Doctor data found successfully",
     MASTER_SURGERY_ADDED: "Master surgery added successfully.",
     MASTER_SURGERY_UPDATED: "Master surgery updated successfully.",
     MASTER_SURGERY_DELETED: "Master surgery deleted successfully.",
     MASTER_SURGERY_FOUND: "Master surgery found successfully.",
     MASTER_SURGERY_LIST: "Master surgery list.",
     FILE_ADDED: "File uploaded successfully.",
-    APPOINTMENT_BOOKED:"Your appointment has been booked",
-    APPOINTMENT_CANCELLATION:"Appointment cancelled successfully.",
-    APPOINTMENT_STATUS:"Appointment status",
-    APPOINTMENT_RESCHEDULE:"Appointment has been reschedule successfully",
+    APPOINTMENT_BOOKED: "Your appointment has been booked",
+    APPOINTMENT_CANCELLATION: "Appointment cancelled successfully.",
+    NOTIFICATION_LIST: "Notification list fetched.",
+    APPOINTMENT_STATUS: "Appointment status",
+    APPOINTMENT_RESCHEDULE: "Appointment has been reschedule successfully",
     NO_RECORD_FOUND: "No record found.",
     SOCIAL_DATA: "Social data found.",
     DATA_ADDED: "Data added successfully.",
@@ -76,18 +76,33 @@ const successMessage = {
     VIDEO_UPDATED: "Video updated successfully.",
     VIDEO_DELETED: "Video deleted successfully.",
     VIDEO_FOUND: "Video record fetched successfully.",
-    DOCTOR_SPECIALITY_LIST:"List of doctor specialites",
-    DOCTOR_REVIEWS_LIST:"List of doctor reviews",
-    DOCTOR_ABOUT_US:"Doctor abbout us",
-    ADMIN_DASHBOARD_APPOINTMENT_COUNT:"Count for appointment bar graph data",
-    DOCTOR_DELETED:" Doctor deleted successfully.",
+    DOCTOR_SPECIALITY_LIST: "List of doctor specialites",
+    DOCTOR_REVIEWS_LIST: "List of doctor reviews",
+    DOCTOR_ABOUT_US: "Doctor about us.",
+    HOSPITAL_ABOUT_US: "Hospital about us.",
+    ADMIN_DASHBOARD_APPOINTMENT_COUNT: "Count for appointment bar graph data",
+    DOCTOR_DELETED: " Doctor deleted successfully.",
     EMAIL_AVAILABLE: "Email available for use.",
     EMAIL_EXISTS: "Email already in use.",
     MEDICAL_REGISTRATION_EXISTS: "Medical registration already in use.",
     MEDICAL_REGISTRATION_AVAILABLE: "Medical registration available for use.",
     DELETED: "Data deleted successfully.",
     HOSPITAL_LIST: "Hospital list fetched.",
-    REVIEW_LIST: "Review list fetched."
+    REVIEW_LIST: "Review list fetched.",
+    FEEDBACK_DELETED: "Feedback deleted successfully.",
+    FEEDBACK_REJECTED: "Feedback rejected successfully.",
+    FEEDBACK_APPROVED: "Feedback approved successfully.",
+    FEEDBACK_LIST: "Feedback list fetched.",
+    PATIENT_LOGOUT: "Patient logged out successfully.",
+    DOCTOR_LOGOUT: "Doctor logged out successfully.",
+    HOSPITAL_LOGOUT: "Hospital logged out successfully.",
+    ADMIN_LOGOUT: "Admin logged out successfully.",
+    APPOINTMENT_RESCHEDULE_SLOTS: "Appointment reschedule slots fetched.",
+    DASHBOARD_COUNT: "Dashboard count fetched.",
+    ENQUIRY_LIST: "Enquiry List fetched.",
+    DOCTOR_ADDED_ESTABLISHMENT: "The doctor Inclusion request sent.",
+    SUCCESS: "Successful.",
+    DEPARTMENT_LIST: "Department list fetched.",
   },
   zh: {
     LOGIN_SUCCESSFUL: "登入成功",
@@ -98,9 +113,9 @@ const successMessage = {
 
 const errorMessage = {
   en: {
-    TOKEN_REQUIRED: "Token is required.",
-    TOKEN_EXPIRED: "Token Expired resend again.",
-    SESSION_EXPIRE: "Your session is expired.",
+    TOKEN_REQUIRED: "Your session is expired. Please login again.",
+    TOKEN_EXPIRED: "Your session is expired. Please login again.",
+    SESSION_EXPIRE: "Your session is expired. Please login again.",
     ALREADY_REGISTERED: "Mobile number already registered.",
     UPDATE_ERROR: "Error in updating data.",
     API_ERROR: "Error in Api Execution.",
@@ -116,17 +131,19 @@ const errorMessage = {
     INVALID_EMAIL: "Invalid email id.",
     INVALID_OTP: "Invalid otp.",
     SIGNUP_FAILED: "Your signUp failed.",
+    EMAIL_EXISTS: "Email already in use.",
     EMAIL_NOT_VERIFIED: "Email is not verified.",
-    INVALID_TOKEN: "Your token is invalid.",
+    INVALID_TOKEN: "Your session is expired. Please login again.",
     EMAIL_NOT_SENT: "Your email address is not a valid.",
     MISSING_TOKEN: "Missing token.",
     MISSING: "Parameter is missing.",
     IMAGE_NOT_ADDED: "Image not Added successfully.",
     NOT_VALID_IMAGE: "Image type is not valid.",
-    IMAGE_IS_LARGE: "Image size is too large.",
+    IMAGE_IS_LARGE: "File size is too large.",
     UNIQUE_TITLE: "cover_title must be unique.",
     UNIQUE_DESCRIPTION: "cover_description must be unique.",
     PASSWORD_MISMATCH: "Password mismatch.",
+    WRONG_PASSWORD: " Password mismatch with database",
     HOSPITAL_NOT_FOUND: "Hospital Not found.",
     FAILED_TO_UPDATE_OTP: "Failed to update otp",
     ACCOUNT_NOT_FOUND: "Account not found.",
@@ -139,11 +156,40 @@ const errorMessage = {
     MISSING_FILE: "Missing file for upload.",
     FILE_NOT_ADDED: "File not uploaded.",
     DOCTOR_ID_MISSING: "doctorId is required.",
-    WRONG_FILE_TYPE:  "Wrong file type.",
-    USER_NOT_FOUND: "User not ffound.",
+    WRONG_FILE_TYPE: "Wrong file type.",
+    USER_NOT_FOUND: "User not found.",
     BAD_REQUEST: "Bad request.",
     RECORD_EXISTS: "Similar record already exists.",
-    ALREADY_ADDED_HOSPITAL:"You have already added your establishment"
+    TIMING_EXISTS: "Similar time exists in another hospital.",
+    ALREADY_OWN_ESTABLISHMENT: "You already own a establishment.",
+    ALREADY_ADDED_HOSPITAL: "You have already added your establishment",
+    PROCEDURE_EXISTS: "Procedure already exists.",
+    SPECIALITY_EXISTS: "Speciality already exists.",
+    DOCTOR_EXISTS: "Doctor already exists.",
+    HOSPITAL_EXISTS: "Hospital already exists.",
+    PHONE_EXISTS: "Phone number already exists.",
+    DOCTOR_NOT_APPROVED: "Doctor yet not approved by Hospital.",
+    APPOINTMENT_NOT_FOUND: "Appointment not found.",
+    ESTABLISHMENT_DOCTOR_NOT_FOUND: "Establishment doctor not found.",
+    ENQUIRY_NOT_FOUND: "Enquiry missing.",
+    UNAUTHORISED_ACCESS: "Unauthorized access.",
+    SURGERY_MASTER_EXISTS: "Surgery already exists.",
+    DOCTOR_EXIST_ESTABLISHMENT:
+      "The doctor inclusion request already sent. Kindly contact the doctor for approval.",
+    MASTER_NOT_DELETED:
+      "Can't delete , because this data is in use by hospital or doctor.",
+    MISSING_API_KEY: "Missing API Key.",
+    INVALID_API_KEY: "Invalid API Key.",
+    FILTER_NOT_SELECTED:
+      "No filter selected. Please select atleast one filter.",
+    OTP_NOT_SENT: "Failed to send otp.",
+    NOT_VALID_FILE: "File type not allowed.",
+    DOCTOR_INACTIVE:
+      "Doctor not active for this day. Please select any other date.",
+    APPOINTMENT_ALREADY_BOOKED:
+      "Appointment for this time slot is already booked. Please choose another slot.",
+    DEPT_NOT_FOUND: "Department not found.",
+    MASTER_EXISTS: "Similar master data already exists.",
   },
   zh: {
     TOKEN_EXPIRED: "登入成功",
@@ -165,10 +211,7 @@ exports.success = (result, res, code) => {
     };
     res.status(code).json(response);
   } catch (error) {
-    console.log(
-      "🚀 ~ file: response.js ~ line 49 ~ exports.success= ~ error",
-      error
-    );
+    console.log(error);
     return res.json({
       success: true,
       status_code: 500,
@@ -181,23 +224,23 @@ exports.success = (result, res, code) => {
 
 exports.error = (error, res, code) => {
   try {
+    const errorStatus = error?.data?.joiError || false;
     const lang = res.get("lang") || "en";
     const response = {
       success: false,
       status_code: code,
-      message:
-        errorMessage[lang][error.msgCode] || errorMessage["en"][error.msgCode],
+      message: errorStatus
+        ? error?.data?.message
+        : errorMessage[lang][error.msgCode] ||
+          errorMessage["en"][error.msgCode],
       result: {
         error: error.data ? error.data : "error",
       },
       time: Date.now(),
     };
     res.status(code).json(response);
-  } catch (err) {
-    console.log(
-      "🚀 ~ file: response.js ~ line 77 ~ exports.success= ~ err",
-      err
-    );
+  } catch (error) {
+    console.log(error);
 
     return res.status(500).json({
       success: false,

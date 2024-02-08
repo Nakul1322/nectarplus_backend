@@ -31,11 +31,11 @@ const userSchema = new Schema(
       type: Boolean,
       default: false,
     },
-    // status: {
-    //   type: Number,
-    //   default: 1,
-    //   enum: [0, 1],
-    // },
+    status: {
+      type: Number,
+      default: constants.PROFILE_STATUS.ACTIVE,
+      enum: constants.PROFILE_STATUS,
+    },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: "User",

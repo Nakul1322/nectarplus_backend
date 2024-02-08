@@ -14,7 +14,7 @@ const addCity = async (req, res) => {
             httpStatus.OK
         );
     } catch (error) {
-        console.log("🚀 ~ file: controller.js ~ line 301 ~ login ~ error", error);
+        console.log(error);
         return response.error(
             { msgCode: "INTERNAL_SERVER_ERROR" },
             res,
@@ -32,7 +32,7 @@ const allCity = async (req, res) => {
             httpStatus.OK
         );
     } catch (error) {
-        console.log("🚀 ~ file: controller.js ~ line 301 ~ login ~ error", error);
+        console.log(error);
         return response.error(
             { msgCode: "INTERNAL_SERVER_ERROR" },
             res,
@@ -52,7 +52,7 @@ const updateCity = async (req, res) => {
             httpStatus.OK
         );
     } catch (error) {
-        console.log("🚀 ~ file: controller.js ~ line 301 ~ login ~ error", error);
+        console.log(error);
         return response.error(
             { msgCode: "INTERNAL_SERVER_ERROR" },
             res,
@@ -71,7 +71,7 @@ const deleteCity = async (req, res) => {
             httpStatus.OK
         );
     } catch (error) {
-        console.log("🚀 ~ file: controller.js ~ line 301 ~ login ~ error", error);
+        console.log(error);
         return response.error(
             { msgCode: "INTERNAL_SERVER_ERROR" },
             res,
@@ -90,7 +90,7 @@ const findCity = async (req, res) => {
             httpStatus.OK
         );
     } catch (error) {
-        console.log("🚀 ~ file: controller.js ~ line 301 ~ login ~ error", error);
+        console.log(error);
         return response.error(
             { msgCode: "INTERNAL_SERVER_ERROR" },
             res,

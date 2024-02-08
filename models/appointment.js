@@ -8,12 +8,14 @@ const appointmentSchema = new Schema(
     doctorId: {
       type: Schema.Types.ObjectId,
       ref: "doctors",
-      // required: true,
     },
     establishmentId: {
       type: Schema.Types.ObjectId,
       ref: "establishmentmasters",
-      // required: true,
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
     },
     appointmentId: {
       type: String,
@@ -29,7 +31,6 @@ const appointmentSchema = new Schema(
     },
     consultationFees: {
       type: Number,
-      // required: true,
     },
     startTime: {
       type: Date,
@@ -37,7 +38,6 @@ const appointmentSchema = new Schema(
     },
     date: {
       type: Date,
-      // required: true,
     },
     slot: {
       type: Number,
@@ -46,7 +46,6 @@ const appointmentSchema = new Schema(
     patientId: {
       type: Schema.Types.ObjectId,
       ref: "patients",
-      // required: true,
     },
     self: {
       type: Boolean,
@@ -54,29 +53,17 @@ const appointmentSchema = new Schema(
     },
     fullName: {
       type: String,
-      // required: true,
     },
     phone: {
       type: String,
-      // required: true,
     },
     email: {
       type: String,
-      // required: true,
     },
     city: {
       type: String,
       default: null,
     },
-    // os: {
-    //   type: String,
-    // },
-    // browser: {
-    //   type: String,
-    // },
-    // device: {
-    //   type: String,
-    // },
     cancelBy: {
       type: Number,
       enum: constants.CANCEL_BY,
@@ -92,15 +79,14 @@ const appointmentSchema = new Schema(
     status: {
       type: Number,
       default: constants.BOOKING_STATUS.BOOKED,
-      // required: true,
     },
     createdBy: {
       type: Schema.Types.ObjectId,
-      ref: "users", // reference the users collection
+      ref: "users",
     },
     modifiedBy: {
       type: Schema.Types.ObjectId,
-      ref: "users", // reference the users collection
+      ref: "users",
     },
   },
   {

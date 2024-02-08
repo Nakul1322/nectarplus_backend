@@ -1,100 +1,313 @@
 const { Router } = require("express");
 const hospitalController = require("./controller");
-const { validate, isAdmin, isHospital, verifyAuthToken } = require("../../../middlewares");
+const {
+  validate,
+  isAdmin,
+  isHospital,
+  verifyAuthToken,
+} = require("../../../middlewares");
 const schema = require("./schema");
 
 const router = Router({ mergeParams: true });
 
-// router.get("/speciality/:id", hospitalController.hospitalSpeciality);
-// router.get("/reviews/:id", hospitalController.hospitalReviews);
-router.get("/profile/:id", hospitalController.hospitalAboutUs);
-//  Admin - Hospital Module
+router.get(
+  "/profile",
+  validate(schema.hospitalProfile, "query"),
+  hospitalController.hospitalAboutUs
+);
 
-router.get("/admin/list",
-  // isAdmin,
-  validate(schema.hospitalList, 'query'),
-  hospitalController.hospitalList);
+router.get(
+  "/admin/list",
+  verifyAuthToken,
+  isAdmin,
+  validate(schema.hospitalList, "query"),
+  hospitalController.hospitalList
+);
 
 router.put(
   "/admin",
-  // isAdmin,
-  validate(schema.hospitalDetails, 'query'),
+  validate(schema.hospitalDetails, "query"),
   validate(schema.editHospitalDetails),
   hospitalController.editHospital
 );
 
 router.post(
   "/admin",
-  // isAdmin,
   validate(schema.addHospitalDetails),
   hospitalController.addHospital
 );
 
-router.get("/admin",
-  // isAdmin,
-  validate(schema.hospitalDetails, 'query'),
-  hospitalController.hospitalDetails);
-
-// Hopspital - Profile Module 
+router.get(
+  "/admin",
+  validate(schema.hospitalDetails, "query"),
+  hospitalController.hospitalDetails
+);
 
 router.put(
   "/profile",
   verifyAuthToken,
   validate(schema.editProfileDetails),
   hospitalController.editHospitalProfile
-)
+);
 
 router.get(
   "/profile",
   verifyAuthToken,
   validate(schema.editProfileDetails),
   hospitalController.editHospitalProfile
-)
+);
 
-//Our Doctor Section........
-router.get("/doctorList",verifyAuthToken,validate(schema.hospitalDoctorList, 'query'), hospitalController.doctorList);
-router.get("/viewDoctorProfile",verifyAuthToken, hospitalController.viewDoctorProfile);
-router.get("/getDoctorProfileForEdit",verifyAuthToken,hospitalController.getDoctorProfileForEdit);
-router.put("/editDoctorProfile",verifyAuthToken, hospitalController.editDoctorProfile); //(schema.hospitalUpdateDoctorProfile)
-router.post("/hospitalAddDoctor",verifyAuthToken, hospitalController.hospitalAddDoctor); //(schema.hospitalAddDoctor) verifyAuthToken,isHospital,
-router.delete("/hospitalRemoveDoctor",verifyAuthToken, hospitalController.hospitalRemoveDoctor);
-router.get("/doctorRequestList",verifyAuthToken,validate(schema.commonList, 'query'),hospitalController.doctorRequestList)
-router.put("/hospitalAcceptDoctor",verifyAuthToken,hospitalController.hospitalAcceptDoctor);
+router.get(
+  "/doctor-list",
+  verifyAuthToken,
+  validate(schema.hospitalDoctorList, "query"),
+  hospitalController.doctorList
+);
 
-// Hospital setting Api's...........
-router.get("/hospitalProfile",verifyAuthToken,hospitalController.hospitalProfile)
-router.get("/hospitalCompleteProfile", hospitalController.hospitalCompleteProfile);
-router.put("/hospitalUpdateProfile",verifyAuthToken,validate(schema.hospitalUpdateProfile), hospitalController.hospitalUpdateProfile); 
-router.post("/hospitaladdService",verifyAuthToken,validate(schema.hospitalAddService), hospitalController.hospitaladdService); 
-router.get("/hospitalGetService",verifyAuthToken,hospitalController.hospitalGetService)
-router.delete("/hospitalDeleteService",verifyAuthToken,validate(schema.hospitalDeleteService,'query'), hospitalController.hospitalDeleteService);
-router.get("/hospitalGetTiming",verifyAuthToken,hospitalController.hospitalGetTiming)
-router.post("/hospitalAddTiming", verifyAuthToken,hospitalController.hospitalAddTiming); //(schema.hospitalUpdateTiming)
-router.put("/hospitalUpdateTiming", verifyAuthToken,hospitalController.hospitalUpdateTiming); //validate(schema.hospitalUpdateTiming),
-router.get("/hospitalGetAddress",verifyAuthToken,hospitalController.hospitalGetAddress)
-router.put("/hospitalUpdateAddress",verifyAuthToken,validate(schema.hospitalUpdateAddress),hospitalController.hospitalUpdateAddress); 
-router.get("/hospitalGetImages",verifyAuthToken,hospitalController.hospitalGetImages);
-router.post("/hospitalAddImages",verifyAuthToken,validate(schema.hospitalAddImages),hospitalController.hospitalAddImages);         
-router.delete("/hospitalDeleteImages",verifyAuthToken,validate(schema.hospitalDeleteImage,'query'), hospitalController.hospitalDeleteImages);
-router.post("/hospitalAddSocial",verifyAuthToken, hospitalController.hospitalAddSocial);   //(schema.hospitalAddSocial)
-router.get("/hospitalSocialData",verifyAuthToken,hospitalController.hospitalSocialData);
-router.delete("/hospitalDeleteSocial",verifyAuthToken, hospitalController.hospitalDeleteSocial);
-router.put("/hospitalUpdateSocial",verifyAuthToken, hospitalController.hospitalUpdateSocial);   //(schema.hospitalUpdateSocial)
-router.delete("/hospitalDeleteAccount",verifyAuthToken, hospitalController.hospitalDeleteAccount);
+router.get(
+  "/view-doctor-profile",
+  verifyAuthToken,
+  hospitalController.viewDoctorProfile
+);
 
-// .......Super Admin Api for Hospital.............
-router.get("/hospitalApproveList",verifyAuthToken,validate(schema.commonList, 'query'),hospitalController.adminHospitalListForApprove);
-router.patch("/adminActionHospital",verifyAuthToken,validate(schema.paramsId, 'query'), validate(schema.adminActionHospital),hospitalController.adminActionHospital);
-router.get("/adminViewHospital",verifyAuthToken,validate(schema.paramsId, 'query'),hospitalController.adminViewHospital)
+router.get(
+  "/get-doctor-profile-for-edit",
+  verifyAuthToken,
+  isHospital,
+  hospitalController.getDoctorProfileForEdit
+);
 
-// Procedure - List
-router.get("/procedure",
-   verifyAuthToken,
-  validate(schema.procedureList, 'query'),
+router.put(
+  "/edit-doctor-profile",
+  verifyAuthToken,
+  hospitalController.editDoctorProfile
+);
+
+router.get(
+  "/hospital-find-doctor",
+  verifyAuthToken,
+  hospitalController.hospitalfindDoctor
+);
+
+router.post(
+  "/hospital-add-doctor",
+  verifyAuthToken,
+  hospitalController.hospitalAddDoctor
+);
+
+router.delete(
+  "/hospital-remove-doctor",
+  verifyAuthToken,
+  hospitalController.hospitalRemoveDoctor
+);
+
+router.get(
+  "/doctor-request-list",
+  verifyAuthToken,
+  validate(schema.commonList, "query"),
+  hospitalController.doctorRequestList
+);
+
+router.put(
+  "/hospital-accept-doctor",
+  verifyAuthToken,
+  hospitalController.hospitalAcceptDoctor
+);
+
+router.get(
+  "/hospital-profile",
+  verifyAuthToken,
+  hospitalController.hospitalProfile
+);
+
+router.get(
+  "/hospital-complete-profile",
+  hospitalController.hospitalCompleteProfile
+);
+
+router.put(
+  "/hospital-update-profile",
+  verifyAuthToken,
+  hospitalController.hospitalUpdateProfile
+);
+
+router.post(
+  "/hospital-add-service",
+  verifyAuthToken,
+  hospitalController.hospitaladdService
+);
+
+router.get(
+  "/hospital-get-service",
+  verifyAuthToken,
+  hospitalController.hospitalGetService
+);
+
+router.delete(
+  "/hospital-delete-service",
+  verifyAuthToken,
+  validate(schema.hospitalDeleteService, "query"),
+  hospitalController.hospitalDeleteService
+);
+
+router.get(
+  "/hospital-get-timing",
+  verifyAuthToken,
+  hospitalController.hospitalGetTiming
+);
+
+router.post(
+  "/hospital-add-timing",
+  verifyAuthToken,
+  hospitalController.hospitalAddTiming
+);
+
+router.put(
+  "/hospital-update-timing",
+  verifyAuthToken,
+  hospitalController.hospitalUpdateTiming
+);
+
+router.get(
+  "/hospital-get-address",
+  verifyAuthToken,
+  hospitalController.hospitalGetAddress
+);
+
+router.put(
+  "/hospital-update-address",
+  verifyAuthToken,
+  validate(schema.hospitalUpdateAddress),
+  hospitalController.hospitalUpdateAddress
+);
+
+router.get(
+  "/hospital-get-images",
+  verifyAuthToken,
+  hospitalController.hospitalGetImages
+);
+
+router.post(
+  "/hospital-add-images",
+  verifyAuthToken,
+  hospitalController.hospitalAddImages
+);
+
+router.delete(
+  "/hospital-delete-images",
+  verifyAuthToken,
+  validate(schema.hospitalDeleteImage, "query"),
+  hospitalController.hospitalDeleteImages
+);
+
+router.post(
+  "/hospital-add-social",
+  verifyAuthToken,
+  hospitalController.hospitalAddSocial
+);
+
+router.get(
+  "/hospital-social-data",
+  verifyAuthToken,
+  hospitalController.hospitalSocialData
+);
+
+router.delete(
+  "/hospital-delete-social",
+  verifyAuthToken,
+  hospitalController.hospitalDeleteSocial
+);
+
+router.put(
+  "/hospital-update-social",
+  verifyAuthToken,
+  hospitalController.hospitalUpdateSocial
+);
+
+router.delete(
+  "/hospital-delete-account",
+  verifyAuthToken,
+  hospitalController.hospitalDeleteAccount
+);
+
+router.post(
+  "/hospital-add-faq",
+  verifyAuthToken,
+  hospitalController.hospitalAddFaq
+);
+
+router.put(
+  "/hospital-update-faq",
+  verifyAuthToken,
+  hospitalController.hospitalUpdateFaq
+);
+
+router.get(
+  "/hospital-faq-list",
+  verifyAuthToken,
+  hospitalController.hospitalFaqList
+);
+
+router.delete(
+  "/hospital-delete-faq",
+  verifyAuthToken,
+  hospitalController.hospitalDeleteFAQ
+);
+
+router.post(
+  "/hospital-add-videos",
+  verifyAuthToken,
+  hospitalController.hospitalAddVideos
+);
+
+router.delete(
+  "/hospital-delete-videos",
+  verifyAuthToken,
+  hospitalController.hospitalDeleteVideos
+);
+
+router.put(
+  "/hospital-update-videos",
+  verifyAuthToken,
+  hospitalController.hospitalUpdateVideos
+);
+
+router.get(
+  "/hospital-video-list",
+  verifyAuthToken,
+  hospitalController.hospitalVideoList
+);
+
+router.get(
+  "/hospital-approve-list",
+  verifyAuthToken,
+  isAdmin,
+  validate(schema.commonList, "query"),
+  hospitalController.adminHospitalListForApprove
+);
+
+router.patch(
+  "/admin-action-hospital",
+  verifyAuthToken,
+  validate(schema.paramsId, "query"),
+  validate(schema.adminActionHospital),
+  hospitalController.adminActionHospital
+);
+
+router.get(
+  "/admin-view-hospital",
+  verifyAuthToken,
+  validate(schema.paramsId, "query"),
+  hospitalController.adminViewHospital
+);
+
+router.get(
+  "/procedure",
+  verifyAuthToken,
+  validate(schema.procedureList, "query"),
   hospitalController.procedureSpecialityList
 );
 
-// Procedure - Add
 router.post(
   "/procedure",
   verifyAuthToken,
@@ -102,22 +315,20 @@ router.post(
   hospitalController.addProcedureSpeciality
 );
 
-// Procedure - Delete
 router.delete(
   "/procedure",
   verifyAuthToken,
-  validate(schema.procedureByID, 'query'),
+  validate(schema.procedureByID, "query"),
   hospitalController.deleteProcedureSpeciality
 );
 
-// Speciality - List
-router.get("/speciality",
+router.get(
+  "/speciality",
   verifyAuthToken,
-  validate(schema.specialityList, 'query'),
+  validate(schema.specialityList, "query"),
   hospitalController.procedureSpecialityList
 );
 
-// Speciality - Add
 router.post(
   "/speciality",
   verifyAuthToken,
@@ -125,60 +336,87 @@ router.post(
   hospitalController.addProcedureSpeciality
 );
 
-// Speciality - Delete
 router.delete(
   "/speciality",
   verifyAuthToken,
-  validate(schema.specialityByID, 'query'),
+  validate(schema.specialityByID, "query"),
   hospitalController.deleteProcedureSpeciality
 );
 
-// Calender - appointment reschedule
 router.post(
   "/appointment",
   verifyAuthToken,
-  validate(schema.appointmentId, 'query'),
+  validate(schema.appointmentId, "query"),
   validate(schema.rescheduleAppointment),
   hospitalController.rescheduleAppointment
 );
 
-// Calender - appointment change status
 router.put(
   "/appointment",
-  // isAdmin,
-  validate(schema.appointmentId, 'query'),
+  verifyAuthToken,
+  validate(schema.appointmentId, "query"),
   validate(schema.changeAppointmentStatus),
   hospitalController.changeAppointmentStatus
 );
 
-// Calender - appointment listing according to date
 router.get(
   "/appointment",
   verifyAuthToken,
-  validate(schema.dateTimeObject, 'query'),
+  validate(schema.dateTimeObject, "query"),
   hospitalController.appointmentListByDate
 );
 
-// Calendar - main list
 router.get(
   "/calendar",
   verifyAuthToken,
-  validate(schema.calendarList, 'query'),
+  validate(schema.calendarList, "query"),
   hospitalController.calendarList
 );
 
-// patient hospital details - service list
-router.get("/service/list",
-  // isAdmin,
-  validate(schema.patientHospitalServiceList, 'query'),
+router.get(
+  "/service/list",
+  validate(schema.patientHospitalServiceList, "query"),
   hospitalController.patientHospitalDetailList
 );
 
-// patient hospital details - service list
-router.get("/review/list",
-  // isAdmin,
-  validate(schema.hospitalReviewList, 'query'),
+router.get(
+  "/review/list",
+  validate(schema.hospitalReviewList, "query"),
   hospitalController.hospitalReviewList
+);
+
+router.post("/find-hospital-list", hospitalController.findHospitalList);
+
+router.post(
+  "/find-doctor-list",
+  validate(schema.findDoctorList, "query"),
+  hospitalController.findDoctorList
+);
+
+router.get(
+  "/dashboard/appointment-count",
+  verifyAuthToken,
+  hospitalController.dashboardCount
+);
+
+router.post(
+  "/dashboard/appointment-count",
+  validate(schema.hospitalSpecialityGraph),
+  verifyAuthToken,
+  hospitalController.hospitalSpecialityGraph
+);
+
+router.get(
+  "/speciality/list",
+  verifyAuthToken,
+  hospitalController.hospitalSpecialityList
+);
+
+router.post(
+  "/dashboard/doctor-appointment-count",
+  validate(schema.hospitalDoctorGraph),
+  verifyAuthToken,
+  hospitalController.hospitalDoctorGraph
 );
 
 module.exports = router;

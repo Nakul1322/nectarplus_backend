@@ -1,23 +1,29 @@
-const establishmentMaster = require("../models/establishmentMaster");
 const {
   User,
   Appointment,
-  Speciality,
   Specialization,
-  Procedure,
   EstablishmentMaster,
   EstablishmentTiming,
   Doctor,
-  CityMaster,
-  Feedback,
+  Patient,
 } = require("../models/index");
-// const { getPagination,getSort } = require("../utils/index");
-// const common = require("../services/common")
-// const config = require("../config/index");
 const { Types } = require("mongoose");
 const { constants } = require("../utils/constant");
 const moment = require("moment");
-const { ObjectId } = require("mongoose").Types;
+const common = require("./common");
+const slugify = require("slugify");
+
+const alphabetStatusParser = (data, alphabetStatus) => {
+  data.forEach((alphabet) => {
+    const { name } = alphabet;
+    const firstLetter = name[0].toUpperCase();
+    const index = firstLetter.charCodeAt(0) - 65;
+    if (index >= 0 && index < 26) {
+      alphabetStatus[index].status = 1;
+    }
+  });
+  return alphabetStatus;
+};
 
 const parseRange = (range) => {
   if (range === "Free") {
@@ -36,10 +42,13 @@ function getDayOfWeek(day) {
   return daysOfWeek[day];
 }
 
-const getSortCondition = (sortBy) => {
+const getSortCondition = (sortBy, location) => {
+  let sortObject;
+  if (location && location.length === 2) sortObject = { distance: 1 };
+  else sortObject = { createdAt: -1 };
   switch (sortBy) {
     case 1:
-      return {};
+      return { createdAt: -1 };
     case 2:
       return { rating: -1 };
     case 3:
@@ -51,33 +60,27 @@ const getSortCondition = (sortBy) => {
     case 6:
       return { recommended: 1 };
     default:
-      return { createdAt: -1 };
+      return sortObject;
   }
-};
-
-const lookupEstablishmentMaster = {
-  $lookup: {
-    from: "establishmentmasters",
-    localField: "_id",
-    foreignField: "doctorId",
-    as: "establishmentmaster",
-  },
-};
-
-const lookupUser = {
-  $lookup: {
-    from: "users",
-    localField: "userId",
-    foreignField: "_id",
-    as: "user",
-  },
 };
 
 const lookupEstablishmentTiming = {
   $lookup: {
     from: "establishmenttimings",
-    localField: "_id",
-    foreignField: "doctorId",
+    let: { establishmentId: "$_id" },
+    pipeline: [
+      {
+        $match: {
+          $expr: {
+            $and: [
+              { $eq: ["$establishmentId", "$$establishmentId"] },
+              { $eq: ["$isVerified", 2] },
+              { $eq: ["$isDeleted", false] },
+            ],
+          },
+        },
+      },
+    ],
     as: "establishmenttiming",
   },
 };
@@ -85,146 +88,125 @@ const lookupEstablishmentTiming = {
 const lookupStateMaster = {
   $lookup: {
     from: "statemasters",
-    localField: "establishmentmaster.address.state",
+    localField: "address.state",
     foreignField: "_id",
     as: "address.state",
   },
 };
 
-const lookupAppointment = {
-  $lookup: {
-    from: "appointments",
-    localField: "_id",
-    foreignField: "doctorId",
-    as: "appointments",
-  },
-};
-
-const lookupAppointmentFeedback = {
-  $lookup: {
-    from: "appointmentfeedbacks",
-    localField: "_id",
-    foreignField: "doctorId",
-    as: "reviews",
-  },
-};
-
-const unwind = (path) => ({
-  $unwind: { path, preserveNullAndEmptyArrays: true },
-});
-
-function createTimeSlots(data) {
-  const slotDuration = data.slotTime;
-  const startDate = moment();
-  const endDate = moment().add(2, "weeks");
+function createTimeSlots(establishmentTiming) {
+  const slotDuration = establishmentTiming.slotTime;
   const result = {};
 
-  for (let day = startDate; day.isSameOrBefore(endDate); day.add(1, "days")) {
-    const dayOfWeek = day.format("ddd").toLowerCase();
-    const slots = data[dayOfWeek] || [];
+  for (const day in establishmentTiming) {
+    if (day === "_id" || day === "doctorId" || day === "establishmentId")
+      continue;
 
-    result[day.format("YYYY-MM-DD")] = slots.reduce((timeSlots, slot) => {
-      const from = day.clone().set({
-        hour: moment(slot.from, "hh:mm A").hour(),
-        minute: moment(slot.from, "hh:mm A").minute(),
-      });
-      const to = day.clone().set({
-        hour: moment(slot.to, "hh:mm A").hour(),
-        minute: moment(slot.to, "hh:mm A").minute(),
-      });
+    const slots = establishmentTiming[day] || [];
+    const timeSlots = [];
+
+    for (const slot of slots) {
+      const from = moment(slot.from, "hh:mm A");
+      const to = moment(slot.to, "hh:mm A");
 
       while (from.isBefore(to)) {
-        if (from.isBefore(moment())) {
-          from.add(slotDuration, "minutes");
-          continue;
-        }
         timeSlots.push(from.format("hh:mm A"));
         from.add(slotDuration, "minutes");
       }
-      return timeSlots;
-    }, []);
+    }
+
+    result[day] = timeSlots;
   }
+
   return result;
 }
 
+const findAvailableDoctors = async (establishmentTimings) => {
+  const doctorIds = [];
+  for (const timing of establishmentTimings) {
+    const timeSlots = createTimeSlots(timing);
+    const doctorId = timing.doctorId;
+    let isAvailable = false;
+
+    for (const dateStr in timeSlots) {
+      const date = moment(dateStr);
+      if (date.isBefore(endDate) && date.isSameOrAfter(today)) {
+        const bookedAppointments = await Appointment.model.find({
+          doctorId: doctorId,
+          date: {
+            $gte: date.toDate(),
+            $lt: date.clone().add(1, "days").toDate(),
+          },
+        });
+
+        // Remove booked slots from the available slots
+        const availableSlots = timeSlots[dateStr].filter((slot) => {
+          return !bookedAppointments.some(
+            (appointment) => appointment.date === slot
+          );
+        });
+
+        if (availableSlots.length > 0) {
+          isAvailable = true;
+          break;
+        }
+      }
+    }
+    if (isAvailable) {
+      doctorIds.push(doctorId);
+    }
+  }
+  return doctorIds;
+};
+
+// cognitive complexity
 const filterDoctor = async (
   filters,
-  queryPararms,
+  queryParams,
   sortCondition,
   offset,
   limit
 ) => {
   const {
-    timeOfDay, //
-    availability, //single 1, 2, 3
-    sortBy, //
-    specialty, //arr
+    timeOfDay, // [Morning, Afternoon, Evening]
+    availability, // single 1, 2, 3
+    sortBy, // single 1,2,3,4,5,6
+    specialty, //array
     consultationFee,
+    coordinates,
   } = filters;
-  const { filter, location } = queryPararms;
-  let query = {
-    userType: 2,
+  const { filter, city, locality } = queryParams;
+  let query = {};
+  const locationFilter = {
+    $or: [],
   };
-  const today = new Date();
-  // const maxAppointmentsPerDay = 36; // Adjust this according to your requirements
+  const searchFilter = {
+    $or: [],
+  };
 
+  let slotQuery = {
+    "establishmenttiming.establishmentId": { $exists: true },
+    totalSlotCount: { $gt: 0 },
+    "establishmenttiming.doctorId": { $exists: true },
+  };
   if (availability) {
     const today = moment().startOf("day");
-    const endDate = moment(today);
-
+    const currentTime = moment().format("h:mm A");
+    let dayForAvailibility;
     switch (availability) {
       case 1:
-        endDate.add(1, "days");
+        dayForAvailibility = today.format("ddd").toLowerCase();
+        query[`${dayForAvailibility}`] = { $ne: [] };
+        query[`${dayForAvailibility}` + ".to"] = {
+          $gt: "0" + currentTime.substring(0, 7),
+        };
         break;
       case 2:
-        today.add(1, "days");
-        endDate.add(2, "days");
+        dayForAvailibility = today.add(1, "days").format("ddd").toLowerCase();
+        query[`${dayForAvailibility}`] = { $ne: [] };
         break;
-      case 3:
-        endDate.add(7, "days");
-        break;
-      default:
-        throw new Error("Invalid filter type");
     }
-    const establishmentTimings = await EstablishmentTiming.model.find(); // Add any necessary filters or projections here
-    const availableDoctorIds = [];
-
-    for (const timing of establishmentTimings) {
-      const timeSlots = createTimeSlots(timing);
-      const doctorId = timing.doctorId;
-      let isAvailable = false;
-
-      for (const dateStr in timeSlots) {
-        const date = moment(dateStr);
-        if (date.isSameOrBefore(endDate) && date.isSameOrAfter(today)) {
-          const bookedAppointments = await Appointment.model.find({
-            doctorId: doctorId,
-            date: {
-              $gte: date.toDate(),
-              $lt: date.clone().add(1, "days").toDate(),
-            },
-          });
-
-          // Remove booked slots from the available slots
-          const availableSlots = timeSlots[dateStr].filter((slot) => {
-            return !bookedAppointments.some(
-              (appointment) => appointment.date === slot
-            );
-          });
-
-          if (availableSlots.length > 0) {
-            isAvailable = true;
-            break;
-          }
-        }
-      }
-      if (isAvailable) {
-        availableDoctorIds.push(doctorId);
-      }
-    }
-    query = { _id: { $in: availableDoctorIds } };
   }
-
   if (consultationFee) {
     query["$expr"] = {
       $or: consultationFee.map((range) => {
@@ -248,75 +230,176 @@ const filterDoctor = async (
       $elemMatch: { _id: { $in: specialtyObjectIds } },
     };
   }
-  // if (availability) {
-  //   const dayOfWeek = today.getDay();
-  //   query = availability.reduce((acc, day) => {
-  //     const dayName = getDayOfWeek((dayOfWeek + day - 1) % 7);
-  //     acc[dayName] = {
-  //       $exists: true,
-  //       $not: { $size: 0 },
-  //     };
-  //     return acc;
-  //   }, query);
-  // }
   if (timeOfDay) {
     const daysOfWeek = Array.from({ length: 7 }, (_, i) => getDayOfWeek(i));
-    // Use the slot names directly from the timeOfDay array in the payload
-    const slots = timeOfDay;
-
-    const slotCondition = slots.flatMap((slot) => {
-      return daysOfWeek.map((day) => {
-        const condition = {};
-        condition[day] = {
-          $elemMatch: {
-            slot: slot.toLowerCase(),
-          },
-        };
-        return condition;
-      });
+    const slotTime = [];
+    timeOfDay.map((slot) => {
+      slotTime.push(slot.toLowerCase());
     });
-    query["$or"] = slotCondition;
+    const slotCondition = daysOfWeek.flatMap((day) => {
+      const condition = {};
+      condition[`establishmenttiming.${day}.slot`] = { $in: slotTime };
+      return condition;
+    });
+    slotQuery["$or"] = slotCondition;
   }
-  if (location) {
-    const locationFilter = {
-      $or: [
-        { city: { $regex: location, $options: "i" } },
-        { state: { $regex: location, $options: "i" } },
-        { pincode: { $regex: location, $options: "i" } },
-      ],
-    };
-    query = { ...query, ...locationFilter };
+  if (locality) {
+    const localityParameter = locality.replace(/%20/g, " ");
+    locationFilter["$or"].push({
+      locality: { $regex: localityParameter, $options: "i" },
+    });
   }
-
+  if (city) {
+    const cityParameter = city.replace(/%20/g, " ");
+    locationFilter["$or"].push({
+      city: { $regex: cityParameter, $options: "i" },
+    });
+  }
   if (filter) {
-    const searchFilter = {
+    const filterString = filter.replace(/%20/g, " ").replace(/[()]/g, "\\$&");
+    const search = {
       $or: [
-        { fullName: { $regex: filter, $options: "i" } },
-        { establishmentName: { $regex: filter, $options: "i" } },
         {
-          specialization: {
-            $elemMatch: { name: { $regex: filter, $options: "i" } },
+          fullName: {
+            $regex: filterString,
+            $options: "i",
+          },
+        },
+        {
+          establishmentName: {
+            $regex: filterString,
+            $options: "i",
+          },
+        },
+        {
+          "specialization.name": {
+            $regex: filterString,
+            $options: "i",
+          },
+        },
+        {
+          "service.name": {
+            $regex: filterString,
+            $options: "i",
           },
         },
       ],
     };
-    query = { ...query, ...searchFilter };
+    searchFilter["$or"].push(...search["$or"]);
   }
-  const newSortCondition = getSortCondition(sortBy);
-  console.log(newSortCondition);
-  console.log(JSON.stringify(query));
+  if (searchFilter["$or"].length > 0 && locationFilter["$or"].length > 0) {
+    query.$and = [];
+    query["$and"].push(searchFilter);
+    query["$and"].push(locationFilter);
+  } else {
+    if (searchFilter["$or"].length > 0) {
+      query.$or = [];
+      query["$or"].push(...searchFilter["$or"]);
+    }
+    if (locationFilter["$or"].length > 0) {
+      query.$or = [];
+      query["$or"].push(...locationFilter["$or"]);
+    }
+  }
+  const newSortCondition = getSortCondition(sortBy, coordinates || false);
   try {
-    const data = await Doctor.model.aggregate([
-      lookupEstablishmentMaster,
-      unwind("$establishmentmaster"),
-      lookupUser,
-      unwind("$user"),
+    let basicPipeline = [
+      {
+        $lookup: {
+          from: "hospitaltypes",
+          localField: "hospitalTypeId",
+          foreignField: "_id",
+          as: "hospitalTypeMaster",
+        },
+      },
+      {
+        $lookup: {
+          from: "hospitals",
+          localField: "hospitalId",
+          foreignField: "_id",
+          as: "hospital",
+        },
+      },
+      {
+        $unwind: { path: "$hospital", preserveNullAndEmptyArrays: true },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "hospital.userId",
+          foreignField: "_id",
+          as: "userData",
+        },
+      },
+      {
+        $unwind: { path: "$userData", preserveNullAndEmptyArrays: false },
+      },
+      {
+        $match: {
+          "hospital.isVerified": constants.PROFILE_STATUS.APPROVE,
+          "hospital.steps": constants.PROFILE_STEPS.COMPLETED,
+          "userData.isDeleted": false,
+          "userData.status": constants.PROFILE_STATUS.ACTIVE,
+        },
+      },
+      lookupEstablishmentTiming,
+      {
+        $unwind: {
+          path: "$establishmenttiming",
+          preserveNullAndEmptyArrays: false,
+        },
+      },
+      { $sort: { "establishmenttiming.isActive": -1 } },
+      {
+        $addFields: {
+          totalSlotCount: {
+            $add: [
+              { $size: "$establishmenttiming.mon" },
+              { $size: "$establishmenttiming.tue" },
+              { $size: "$establishmenttiming.wed" },
+              { $size: "$establishmenttiming.thu" },
+              { $size: "$establishmenttiming.fri" },
+              { $size: "$establishmenttiming.sat" },
+              { $size: "$establishmenttiming.sun" },
+            ],
+          },
+        },
+      },
+      {
+        $match: slotQuery,
+      },
+      {
+        $lookup: {
+          from: "doctors",
+          localField: "establishmenttiming.doctorId",
+          foreignField: "_id",
+          as: "doctor",
+        },
+      },
+      { $unwind: { path: "$doctor", preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: "users",
+          localField: "doctor.userId",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
+      {
+        $match: {
+          "doctor.isVerified": constants.PROFILE_STATUS.APPROVE,
+          "doctor.steps": constants.PROFILE_STEPS.COMPLETED,
+          "user.status": { $ne: constants.PROFILE_STATUS.DEACTIVATE },
+          "user.isDeleted": false,
+          "user.userType": 2,
+        },
+      },
       lookupStateMaster,
-      unwind("$address.state"),
       {
         $lookup: {
           from: "specializations",
-          let: { specIds: "$specialization" },
+          let: { specIds: "$doctor.specialization" },
           pipeline: [
             {
               $match: {
@@ -333,29 +416,34 @@ const filterDoctor = async (
           as: "specialization",
         },
       },
-      lookupAppointmentFeedback,
-      lookupEstablishmentTiming,
-      unwind("$establishmenttiming"),
-      lookupAppointment,
       {
         $project: {
+          _id: `$doctor._id`,
+          doctorProfileSlug: { $ifNull: [`$doctor.profileSlug`, null] },
+          doctorId: `$doctor._id`,
           fullName: "$user.fullName",
-          profilePic: 1,
-          experience: 1,
-          convertedexperience: { $toInt: "$experience" },
+          profilePic: "$doctor.profilePic",
+          experience: "$doctor.experience",
+          doctorCity: "$doctor.city",
+          convertedexperience: { $toInt: "$doctor.experience" },
           userId: { $ifNull: [`$user._id`, null] },
+          establishmenttiming: 1,
           consultationFees: "$establishmenttiming.consultationFees",
-          recommended: 1,
-          totalReview: { $size: "$reviews" },
+          establishmentId: "$establishmenttiming.establishmentId",
+          recommended: "$doctor.recommended",
+          totalReview: { $ifNull: [`$doctor.totalreviews`, 0] },
           specialization: "$specialization",
-          address: "$establishmentmaster.address",
-          pinLocation: "$establishmentmaster.location",
-          establishmentName: "$establishmentmaster.name",
-          city: "$establishmentmaster.city",
+          address: "$address",
+          establishmentProfileSlug: { $ifNull: [`$profileSlug`, constants.NA] },
+          pinLocation: "$location",
+          isLocationShared: "$isLocationShared",
+          establishmentName: "$name",
+          city: "$address.city",
+          locality: "$address.locality",
           state: "$address.state.name",
-          pincode: "$establishmentmaster.address.pincode",
+          pincode: "$address.pincode",
           userType: "$user.userType",
-          rating: 1,
+          rating: "$doctor.rating",
           mon: "$establishmenttiming.mon",
           tue: "$establishmenttiming.tue",
           wed: "$establishmenttiming.wed",
@@ -363,12 +451,38 @@ const filterDoctor = async (
           fri: "$establishmenttiming.fri",
           sat: "$establishmenttiming.sat",
           sun: "$establishmenttiming.sun",
-          createdAt: 1,
-          updatedAt: 1,
+          createdAt: "$doctor.createdAt",
+          updatedAt: "$doctor.updatedAt",
+          service: "$doctor.service",
+          distance: 1,
+          hospitalTypeMaster: 1,
+          isActive: "$establishmenttiming.isActive",
         },
       },
       {
         $match: query,
+      },
+      {
+        $group: {
+          _id: "$_id", // Group the documents by the _id
+          docs: { $push: "$$ROOT" },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          doctorDetails: { $first: "$docs" },
+          distance: { $first: "$distance" },
+          docs: 1,
+        },
+      },
+      {
+        $addFields: {
+          "doctorDetails.establishmentMaster": `$docs`,
+        },
+      },
+      {
+        $replaceRoot: { newRoot: "$doctorDetails" }, // Set the original documents by new root
       },
       {
         $facet: {
@@ -397,7 +511,27 @@ const filterDoctor = async (
           },
         },
       },
-    ]);
+    ];
+    let locationQuery;
+    if (coordinates?.length === 2)
+      locationQuery = {
+        $geoNear: {
+          near: { type: "Point", coordinates: coordinates },
+          spherical: true,
+          distanceField: "distance",
+        },
+      };
+
+    let locationBasedPipeline = [
+      locationQuery,
+      { $sort: { distance: 1 } },
+      ...basicPipeline,
+    ];
+    const searchPipeline =
+      !coordinates || coordinates?.length !== 2
+        ? basicPipeline
+        : locationBasedPipeline;
+    const data = await EstablishmentMaster.model.aggregate(searchPipeline);
     const slotTime = 15;
     const doctorsWithAvailableSlotsPromises = data[0].data.map((doctor) =>
       calculateAvailableSlotsForDoctor(doctor, slotTime)
@@ -411,67 +545,105 @@ const filterDoctor = async (
     return { count: data[0].count, data: doctorsWithSlots };
   } catch (error) {
     console.log(error);
-    throw new Error("Failed to fetch users");
+    return false;
   }
 };
 
 function generateNextTwoWeeks() {
-  const today = moment.utc();
+  const today = moment().utcOffset(330); // Set the timezone to IST
   const nextTwoWeeks = [];
   for (let i = 0; i < 14; i++) {
-    const date = moment.utc(today).add(i, "days").toDate();
+    const date = moment(today).add(i, "days").toDate();
     nextTwoWeeks.push(date);
   }
   return nextTwoWeeks;
 }
 
-async function getBookedAppointmentCount(doctorId, date) {
-  const startOfDay = moment.utc(date).startOf("day").toDate();
-  const endOfDay = moment.utc(date).endOf("day").toDate();
-  const count = await Appointment.model.countDocuments({
-    doctorId: doctorId,
-    date: { $gte: startOfDay, $lte: endOfDay },
-    status: { $nin: [-1, -2] }, // Exclude cancelled (-1) and rescheduled (-2) appointments
-  });
-  return count;
+function countPassedSlotsForToday(
+  fromSlot,
+  toSlot,
+  currentTime,
+  slotsInTimeRange,
+  slotTime
+) {
+  let passedSlotCount = 0;
+  if (fromSlot < currentTime && toSlot < currentTime)
+    passedSlotCount = slotsInTimeRange;
+  else if (fromSlot < currentTime && currentTime < toSlot) {
+    passedSlotCount = Math.ceil(
+      moment(currentTime, "hh:mm A").diff(
+        moment(fromSlot, "hh:mm A"),
+        "minutes"
+      ) / slotTime
+    );
+  }
+  return passedSlotCount;
 }
 
+const getBookedAppointmentCount = async (doctorId, date) => {
+  const startOfDay = moment(date).utcOffset(330).startOf("day").toDate(); // Set the timezone to IST
+  const endOfDay = moment(date).utcOffset(330).endOf("day").toDate(); // Set the timezone to IST
+  return await common.count(Appointment.model, {
+    doctorId: doctorId,
+    date: { $gte: startOfDay, $lte: endOfDay },
+    status: {
+      $nin: [
+        constants.BOOKING_STATUS.CANCEL,
+        constants.BOOKING_STATUS.RESCHEDULE,
+      ],
+      isDeleted: false,
+    }, // Exclude cancelled (-1) and rescheduled (-2) appointments
+  });
+};
+
 async function calculateAvailableSlotsForDoctor(doctor, slotTime) {
-  const schedule = {
-    1: doctor.mon,
-    2: doctor.tue,
-    3: doctor.wed,
-    4: doctor.thu,
-    5: doctor.fri,
-    6: doctor.sat,
-    7: doctor.sun,
-  };
+  let schedule = {};
+  if (!doctor.isActive)
+    schedule = {
+      1: [],
+      2: [],
+      3: [],
+      4: [],
+      5: [],
+      6: [],
+      7: [],
+    };
+  else
+    schedule = {
+      1: doctor.mon,
+      2: doctor.tue,
+      3: doctor.wed,
+      4: doctor.thu,
+      5: doctor.fri,
+      6: doctor.sat,
+      7: doctor.sun,
+    };
 
   const nextTwoWeeks = generateNextTwoWeeks();
   const availableSlots = [];
-
+  const dateOfToday = nextTwoWeeks[0];
   for (const date of nextTwoWeeks) {
     const day = moment.utc(date).day() === 0 ? 7 : moment.utc(date).day();
     const daySchedule = schedule[day] || [];
-
     const totalSlots = daySchedule.reduce((slots, timeRange) => {
-      const from = moment.utc(date).set({
-        hour: parseInt(timeRange.from.split(":")[0]),
-        minute: parseInt(timeRange.from.split(":")[1]),
-      });
-
-      const to = moment.utc(date).set({
-        hour: parseInt(timeRange.to.split(":")[0]),
-        minute: parseInt(timeRange.to.split(":")[1]),
-      });
-
+      const from = moment(timeRange.from, "hh:mm A");
+      const to = moment(timeRange.to, "hh:mm A");
       const diffInMinutes = to.diff(from, "minutes");
       const slotsInTimeRange = Math.floor(diffInMinutes / slotTime);
-      return slots + slotsInTimeRange;
+      const slotsPassedForToday =
+        dateOfToday === date
+          ? countPassedSlotsForToday(
+              from,
+              to,
+              moment(dateOfToday, "hh:mm A"),
+              slotsInTimeRange,
+              slotTime
+            )
+          : 0;
+      return slots + slotsInTimeRange - slotsPassedForToday;
     }, 0);
-
     const bookedCount = await getBookedAppointmentCount(doctor._id, date);
-    const remainingSlots = totalSlots - bookedCount;
+    const remainingSlots = Math.max(totalSlots - bookedCount, 0);
 
     availableSlots.push({
       date: moment.utc(date).toISOString().split("T")[0],
@@ -479,18 +651,17 @@ async function calculateAvailableSlotsForDoctor(doctor, slotTime) {
       remainingSlots: remainingSlots,
     });
   }
-
   return availableSlots;
 }
 
 const filterTopRatedDoctor = async (filters) => {
-  let pipeline1,
-    pipeline2 = [];
-  pipeline1 = [
+  let dentalPipeline,
+    orthoPipeline = [];
+  dentalPipeline = [
     {
       $match: {
         specialization: {
-          $in: [new Types.ObjectId("6449025319b52d5fe2e72ae4")],
+          $in: [new Types.ObjectId("645ca7af311a098a4cf33e1b")],
         },
       },
     },
@@ -503,48 +674,9 @@ const filterTopRatedDoctor = async (filters) => {
       },
     },
     {
-      $unwind: { path: "$specialization", preserveNullAndEmptyArrays: true },
-    },
-    {
       $match: {
-        "specialization.name": "Dental",
+        "specialization.name": "Dentist",
       },
-    },
-    {
-      $lookup: {
-        from: "establishmentmasters",
-        localField: "_id",
-        foreignField: "doctorId",
-        as: "establishmentDetails",
-      },
-    },
-    {
-      $unwind: {
-        path: "$establishmentDetails",
-        preserveNullAndEmptyArrays: true,
-      },
-    },
-    {
-      $lookup: {
-        from: "citymasters",
-        localField: "establishmentDetails.address.city",
-        foreignField: "_id",
-        as: "address.city",
-      },
-    },
-    {
-      $unwind: { path: "$address.city", preserveNullAndEmptyArrays: true },
-    },
-    {
-      $lookup: {
-        from: "statemasters",
-        localField: "establishmentDetails.address.state",
-        foreignField: "_id",
-        as: "address.state",
-      },
-    },
-    {
-      $unwind: { path: "$address.state", preserveNullAndEmptyArrays: true },
     },
     {
       $lookup: {
@@ -558,75 +690,128 @@ const filterTopRatedDoctor = async (filters) => {
       $unwind: { path: "$user", preserveNullAndEmptyArrays: true },
     },
     {
-      $lookup: {
-        from: "appointmentfeedbacks",
-        let: { doctorId: "$_id" },
-        pipeline: [
-          {
-            $match: {
-              $expr: { $eq: ["$doctorId", "$$doctorId"] },
-            },
-          },
-        ],
-        as: "reviews",
+      $match: {
+        "user.isDeleted": false,
+        "user.userType": constants.USER_TYPES.DOCTOR,
+        "user.status": constants.PROFILE_STATUS.ACTIVE,
+        isVerified: constants.PROFILE_STATUS.APPROVE,
       },
     },
     {
       $lookup: {
         from: "establishmenttimings",
-        localField: "userId",
-        foreignField: "userId",
+        let: { doctorId: "$_id" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$doctorId", "$$doctorId"] },
+                  { $eq: ["$isVerified", 2] },
+                  { $eq: ["$isDeleted", false] },
+                  { $eq: ["$isActive", true] },
+                ],
+              },
+            },
+          },
+        ],
         as: "establishmenttiming",
       },
     },
     {
+      $match: {
+        $expr: {
+          $gt: [{ $size: "$establishmenttiming" }, 0],
+        },
+      },
+    },
+    { $sort: { "establishmenttiming.consultationFees": 1 } },
+    {
+      $addFields: {
+        establishmentTiming: { $arrayElemAt: ["$establishmenttiming", 0] },
+      },
+    },
+    {
+      $lookup: {
+        from: "establishmentmasters",
+        localField: "establishmentTiming.establishmentId",
+        foreignField: "_id",
+        as: "establishmentMaster",
+      },
+    },
+    {
       $unwind: {
-        path: "$establishmenttiming",
+        path: "$establishmentMaster",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $lookup: {
+        from: "statemasters",
+        localField: "establishmentMaster.address.state",
+        foreignField: "_id",
+        as: "addressState",
+      },
+    },
+    {
+      $unwind: {
+        path: "$addressState",
         preserveNullAndEmptyArrays: true,
       },
     },
     {
       $project: {
         _id: 1,
-        userId: 1,
-        doctorName: "$user.fullName",
-        doctorProfilePicture: "$profilePic",
-        rating: 1,
-        recommended: 1,
-        specialization: "$specialization.name",
-        totalReview: { $size: "$reviews" },
-        consultationFees: "$establishmenttiming.consultationFees",
+        userId: { $ifNull: [`$userId`, constants.NA] },
+        createdAt: { $ifNull: [`$createdAt`, constants.NA] },
+        establishmentId: {
+          $ifNull: [`$establishmentTiming.establishmentId`, constants.NA],
+        },
+        doctorId: "$_id",
+        doctorName: { $ifNull: [`$user.fullName`, constants.NA] },
+        doctorProfilePicture: { $ifNull: [`$profilePic`, constants.NA] },
+        rating: { $ifNull: [`$rating`, 0] },
+        recommended: { $ifNull: [`$recommended`, 0] },
+        specialization: { $ifNull: [`$specialization.name`, constants.NA] },
+        totalReview: { $ifNull: [`$totalreviews`, 0] },
+        consultationFees: {
+          $ifNull: [`$establishmentTiming.consultationFees`, constants.NA],
+        },
+        doctorProfileSlug: "$profileSlug",
+        establishmentProfileSlug: {
+          $ifNull: [`$establishmentMaster.profileSlug`, constants.NA],
+        },
         address: {
-          address: "$establishmentDetails.address.address",
-          landmark: "$establishmentDetails.address.landmark",
-          country: "$establishmentDetails.address.country",
-          street: "$establishmentDetails.address.street",
-          city: "$address.city.name",
-          state: "$address.state.name",
-          pincode: "$establishmentDetails.address.pincode",
-          _id: "$establishmentDetails.address._id",
-          cityId: "$establishmentDetails.address.city",
-          stateId: "$establishmentDetails.address.state",
+          landmark: {
+            $ifNull: [`$establishmentMaster.address.landmark`, constants.NA],
+          },
+          locality: {
+            $ifNull: [`$establishmentMaster.address.locality`, constants.NA],
+          },
+          city: {
+            $ifNull: [`$establishmentMaster.address.city`, constants.NA],
+          },
+          state: "$addressState.name",
+          stateId: {
+            $ifNull: [`$establishmentMaster.address.state`, constants.NA],
+          },
+          pincode: {
+            $ifNull: [`$establishmentMaster.address.pincode`, constants.NA],
+          },
+          country: {
+            $ifNull: [`$establishmentMaster.address.country`, constants.NA],
+          },
         },
       },
     },
+    { $sort: { rating: -1 } },
   ];
-  pipeline2 = [
-    {
-      $match: {
-        $expr: {
-          $eq: [
-            { $arrayElemAt: ["$feedback.selectedOptionId", 0] },
-            new Types.ObjectId("645c9b00311a098a4cf33e13"),
-          ],
-        },
-      },
-    },
+  orthoPipeline = [
     {
       $lookup: {
         from: "doctors",
-        localField: "doctorId",
-        foreignField: "_id",
+        localField: "_id",
+        foreignField: "userId",
         as: "doctor",
       },
     },
@@ -634,10 +819,63 @@ const filterTopRatedDoctor = async (filters) => {
       $unwind: { path: "$doctor", preserveNullAndEmptyArrays: true },
     },
     {
+      $match: {
+        isDeleted: false,
+        userType: constants.USER_TYPES.DOCTOR,
+        status: constants.PROFILE_STATUS.ACTIVE,
+        "doctor.isVerified": constants.PROFILE_STATUS.APPROVE,
+        "doctor.specialization": {
+          $in: [new Types.ObjectId("6448c62d19b52d5fe2e72aaa")],
+        },
+      },
+    },
+    {
+      $lookup: {
+        from: "specializations",
+        localField: "doctor.specialization",
+        foreignField: "_id",
+        as: "specialization",
+      },
+    },
+    {
+      $lookup: {
+        from: "establishmenttimings",
+        let: { doctorId: "$doctor._id" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$doctorId", "$$doctorId"] },
+                  { $eq: ["$isVerified", 2] },
+                  { $eq: ["$isDeleted", false] },
+                  { $eq: ["$isActive", true] },
+                ],
+              },
+            },
+          },
+        ],
+        as: "establishmenttiming",
+      },
+    },
+    {
+      $match: {
+        $expr: {
+          $gt: [{ $size: "$establishmenttiming" }, 0],
+        },
+      },
+    },
+    { $sort: { "establishmenttiming.consultationFees": 1 } },
+    {
+      $addFields: {
+        establishmentTiming: { $arrayElemAt: ["$establishmenttiming", 0] },
+      },
+    },
+    {
       $lookup: {
         from: "establishmentmasters",
-        localField: "doctorId",
-        foreignField: "doctorId",
+        localField: "establishmentTiming.establishmentId",
+        foreignField: "_id",
         as: "establishmentDetails",
       },
     },
@@ -646,17 +884,6 @@ const filterTopRatedDoctor = async (filters) => {
         path: "$establishmentDetails",
         preserveNullAndEmptyArrays: true,
       },
-    },
-    {
-      $lookup: {
-        from: "citymasters",
-        localField: "establishmentDetails.address.city",
-        foreignField: "_id",
-        as: "address.city",
-      },
-    },
-    {
-      $unwind: { path: "$address.city", preserveNullAndEmptyArrays: true },
     },
     {
       $lookup: {
@@ -670,92 +897,80 @@ const filterTopRatedDoctor = async (filters) => {
       $unwind: { path: "$address.state", preserveNullAndEmptyArrays: true },
     },
     {
-      $lookup: {
-        from: "users",
-        localField: "doctor.userId",
-        foreignField: "_id",
-        as: "user",
-      },
-    },
-    {
-      $unwind: { path: "$user", preserveNullAndEmptyArrays: true },
-    },
-    {
-      $lookup: {
-        from: "appointmentfeedbacks",
-        let: { doctorId: "$_id" },
-        pipeline: [
-          {
-            $match: {
-              $expr: { $eq: ["$doctorId", "$$doctorId"] },
-            },
-          },
-        ],
-        as: "reviews",
-      },
-    },
-    {
-      $lookup: {
-        from: "establishmenttimings",
-        localField: "userId",
-        foreignField: "userId",
-        as: "establishmenttiming",
-      },
-    },
-    {
-      $unwind: {
-        path: "$establishmenttiming",
-        preserveNullAndEmptyArrays: true,
-      },
-    },
-    {
       $project: {
-        _id: 1,
-        userId: 1,
-        doctorName: "$user.fullName",
+        _id: "$doctor._id",
+        doctorId: "$doctor._id",
+        doctorProfileSlug: { $ifNull: [`$doctor.profileSlug`, constants.NA] },
+        establishmentProfileSlug: {
+          $ifNull: [`$establishmentDetails.profileSlug`, constants.NA],
+        },
+        establishmentId: "$establishmentDetails._id",
+        doctorName: "$fullName",
         doctorProfilePicture: "$doctor.profilePic",
-        rating: 1,
+        consultationFees: {
+          $ifNull: [`$establishmentTiming.consultationFees`, constants.NA],
+        },
+        rating: "$doctor.rating",
         timeTaken: {
           $cond: {
             if: {
-              $eq: [
-                { $arrayElemAt: ["$feedback.selectedOptionId", 0] },
-                new Types.ObjectId("645c9b00311a098a4cf33e13"),
-              ],
+              $gte: ["$doctor.waitTime", 0.75],
             },
             then: "15 mins wait time",
-            else: "Wait time is more than 15 mins",
+            else: {
+              $cond: {
+                if: {
+                  $gte: ["$doctor.waitTime", 0.5],
+                },
+                then: "30 mins wait time",
+                else: {
+                  $cond: {
+                    if: {
+                      $gte: ["$doctor.waitTime", 0.25],
+                    },
+                    then: "45 mins wait time",
+                    else: {
+                      $cond: {
+                        if: {
+                          $gt: ["$doctor.waitTime", 0],
+                        },
+                        then: "60 mins wait time",
+                        else: null,
+                      },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
         specialization: "$specialization.name",
-        totalReview: { $size: "$reviews" },
+        totalReview: "$doctor.totalreviews",
         address: {
-          address: "$establishmentDetails.address.address",
           landmark: "$establishmentDetails.address.landmark",
           country: "$establishmentDetails.address.country",
-          street: "$establishmentDetails.address.street",
-          city: "$address.city.name",
+          city: "$establishmentDetails.address.city",
           state: "$address.state.name",
           pincode: "$establishmentDetails.address.pincode",
-          _id: "$establishmentDetails.address._id",
-          cityId: "$establishmentDetails.address.city",
           stateId: "$establishmentDetails.address.state",
         },
+        waitTime: "$doctor.waitTime",
       },
     },
+    { $sort: { waitTime: -1 } },
   ];
   try {
-    const topDentalDoc = await Doctor.model.aggregate(pipeline1);
-    const shortestTimecardiologist = await Feedback.model.aggregate(pipeline2);
+    const topDentalDoc = await Doctor.model.aggregate(dentalPipeline);
+    const shortestTimecardiologist = await User.model.aggregate(orthoPipeline);
     const data = { topDentalDoc, shortestTimecardiologist };
     return data;
   } catch (error) {
     console.log(error);
-    throw new Error("Failed to fetch feedbacks data");
+    return {};
   }
 };
 
-const calenderList = async (matchCondition, condition1) => {
+const calenderList = async (matchCondition, condition1, hospitalQuery) => {
   try {
     const data = await Appointment.model.aggregate([
       { $match: matchCondition },
@@ -806,8 +1021,21 @@ const calenderList = async (matchCondition, condition1) => {
       {
         $lookup: {
           from: "establishmenttimings",
-          localField: "establishmentId",
-          foreignField: "establishmentId",
+          let: { doctorId: "$doctorId", establishmentId: "$establishmentId" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$doctorId", "$$doctorId"] },
+                    { $eq: ["$establishmentId", "$$establishmentId"] },
+                    { $eq: ["$isDeleted", false] },
+                    { $eq: ["$isVerified", constants.PROFILE_STATUS.APPROVE] },
+                  ],
+                },
+              },
+            },
+          ],
           as: "establishmentTiming",
         },
       },
@@ -817,13 +1045,27 @@ const calenderList = async (matchCondition, condition1) => {
           preserveNullAndEmptyArrays: true,
         },
       },
-
       {
         $lookup: {
           from: "establishmentmasters",
-          localField: "establishmentId",
-          foreignField: "_id",
+          let: { establishmentId: "$establishmentId" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [{ $eq: ["$_id", "$$establishmentId"] }],
+                },
+              },
+            },
+          ],
           as: "establishmentMasterData",
+        },
+      },
+      { $match: { "establishmentMasterData.doctorId": { $exists: false } } },
+      {
+        $unwind: {
+          path: "$establishmentMasterData",
+          preserveNullAndEmptyArrays: true,
         },
       },
       {
@@ -845,10 +1087,10 @@ const calenderList = async (matchCondition, condition1) => {
       {
         $unwind: { path: "$userData", preserveNullAndEmptyArrays: true },
       },
-
+      // {$match:hospitalQuery},
       {
         $project: {
-          hospitalName: "$userData.fullName",
+          hospitalName: "$establishmentMasterData.name", //"$userData.fullName",
           establishmentId: 1,
           date: 1,
           self: 1,
@@ -865,11 +1107,13 @@ const calenderList = async (matchCondition, condition1) => {
           patientDetails: {
             fullName: "$patientDetails.fullName",
             phone: "$patientDetails.phone",
+            countryCode: "$patientDetails.countryCode",
             isVerified: "$patientData.isVerified",
             profilePic: "$patientData.profilePic",
           },
           dayOfWeek: { $dayOfWeek: "$date" },
           establishmentTiming: 1,
+          createdAt: 1,
         },
       },
       {
@@ -887,114 +1131,22 @@ const calenderList = async (matchCondition, condition1) => {
           email: 1,
           doctorDetails: 1,
           patientDetails: 1,
-          establishmentTimingOfDay: {
-            $switch: {
-              branches: [
-                {
-                  case: { $eq: ["$dayOfWeek", 1] },
-                  then: "$establishmentTiming.sun",
-                },
-                {
-                  case: { $eq: ["$dayOfWeek", 2] },
-                  then: "$establishmentTiming.mon",
-                },
-                {
-                  case: { $eq: ["$dayOfWeek", 3] },
-                  then: "$establishmentTiming.tue",
-                },
-                {
-                  case: { $eq: ["$dayOfWeek", 4] },
-                  then: "$establishmentTiming.wed",
-                },
-                {
-                  case: { $eq: ["$dayOfWeek", 5] },
-                  then: "$establishmentTiming.thu",
-                },
-                {
-                  case: { $eq: ["$dayOfWeek", 6] },
-                  then: "$establishmentTiming.fri",
-                },
-                {
-                  case: { $eq: ["$dayOfWeek", 7] },
-                  then: "$establishmentTiming.sat",
-                },
-              ],
-              default: "Not found",
-            },
-          }, // Get the establishment timing for the corresponding day
-          establishmentTimingOfWeek: {
-            sun: {
-              $cond: [
-                { $gt: [{ $size: "$establishmentTiming.sun" }, 0] },
-                true,
-                false,
-              ],
-            },
-            mon: {
-              $cond: [
-                { $gt: [{ $size: "$establishmentTiming.mon" }, 0] },
-                true,
-                false,
-              ],
-            },
-            tue: {
-              $cond: [
-                { $gt: [{ $size: "$establishmentTiming.tue" }, 0] },
-                true,
-                false,
-              ],
-            },
-            wed: {
-              $cond: [
-                { $gt: [{ $size: "$establishmentTiming.wed" }, 0] },
-                true,
-                false,
-              ],
-            },
-            thu: {
-              $cond: [
-                { $gt: [{ $size: "$establishmentTiming.thu" }, 0] },
-                true,
-                false,
-              ],
-            },
-            fri: {
-              $cond: [
-                { $gt: [{ $size: "$establishmentTiming.fri" }, 0] },
-                true,
-                false,
-              ],
-            },
-            sat: {
-              $cond: [
-                { $gt: [{ $size: "$establishmentTiming.sat" }, 0] },
-                true,
-                false,
-              ],
-            },
-          },
+          createdAt: 1,
         },
       },
+      { $sort: { createdAt: -1 } },
       {
         $group: {
-          _id: { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
+          _id: { $dateToString: { date: "$date" } },
           totalCount: { $sum: 1 },
           data: { $push: "$$ROOT" },
         },
       },
       { $sort: { _id: 1 } },
-      {
-        $project: {
-          _id: 0,
-          date: "$_id",
-          count: "$totalCount",
-          data: "$data",
-        },
-      },
     ]);
     return data;
-  } catch (err) {
-    console.log("🚀 ~ file: doctor.js:823 ~ calenderList ~ err:", err);
+  } catch (error) {
+    console.log(error);
     return false;
   }
 };
@@ -1013,8 +1165,8 @@ const appointmentList = async (condition, limit, skip, search, isExport) => {
       data: [],
     };
     if (!isExport) {
-      facetObject.data.push({ $skip: Number(skip) }),
-        facetObject.data.push({ $limit: Number(limit) });
+      facetObject.data.push({ $skip: Number(skip) });
+      facetObject.data.push({ $limit: Number(limit) });
     }
     const data = await Appointment.model.aggregate([
       { $match: condition },
@@ -1085,6 +1237,12 @@ const appointmentList = async (condition, limit, skip, search, isExport) => {
         },
       },
       {
+        $unwind: {
+          path: "$establishmentData",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
         $lookup: {
           from: "hospitals",
           localField: "establishmentData.hospitalId",
@@ -1117,22 +1275,14 @@ const appointmentList = async (condition, limit, skip, search, isExport) => {
           consultationFees: 1,
           doctorDetailsFromUser: 1,
           patientDetailsFromUser: 1,
-          // establishmentData: {
-          //   name: "$establishmentData.name",
-          // },
-          hospitalName: "$hospitalDetailsFromUser.fullName",
+          hospitalName: "$establishmentData.name", //"$hospitalDetailsFromUser.fullName"
           patientDetails: {
             fullName: "$patientDetails.fullName",
             phone: "$patientDetails.phone",
           },
         },
       },
-      // {
-      //   $facet: {
-      //     count: [{ $count: "count" }],
-      //     data: [{ $skip: Number(skip) }, { $limit: Number(limit) }],
-      //   },
-      // },
+      { $sort: { date: 1 } },
       {
         $facet: facetObject,
       },
@@ -1143,7 +1293,7 @@ const appointmentList = async (condition, limit, skip, search, isExport) => {
       },
     ]);
     return data[0];
-  } catch (err) {
+  } catch (error) {
     return false;
   }
 };
@@ -1152,22 +1302,6 @@ const completeDoctorProfile = async (condition) => {
   try {
     const data = await User.model.aggregate([
       { $match: condition },
-      // {
-      //   $lookup: {
-      //     from: "faqs",
-      //     localField: "_id",
-      //     foreignField: "userId",
-      //     as: "faq",
-      //   },
-      // },
-      // {
-      //   $lookup: {
-      //     from: "feedbacks",
-      //     localField: "_id",
-      //     foreignField: "doctorId",
-      //     as: "feedback",
-      //   },
-      // },
       {
         $lookup: {
           from: "specializations",
@@ -1178,7 +1312,7 @@ const completeDoctorProfile = async (condition) => {
       },
     ]);
     return data;
-  } catch (err) {
+  } catch (error) {
     return false;
   }
 };
@@ -1197,19 +1331,55 @@ const getDoctorProfile = async (condition) => {
       },
       { $unwind: { path: "$doctor", preserveNullAndEmptyArrays: true } },
       {
-        $unwind: { path: "$specialization", preserveNullAndEmptyArrays: true },
+        $lookup: {
+          from: "hospitals",
+          localField: "_id",
+          foreignField: "userId",
+          as: "hospital",
+        },
       },
+      { $unwind: { path: "$hospital", preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: "establishmenttimings",
+          localField: "doctor._id",
+          foreignField: "doctorId",
+          as: "establishmentTiming",
+        },
+      },
+      {
+        $unwind: {
+          path: "$establishmentTiming",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      { $sort: { "establishmentTiming.createdAt": 1 } },
+      { $limit: 1 },
       {
         $lookup: {
           from: "establishmentmasters",
-          localField: "doctor._id",
-          foreignField: "doctorId",
+          localField: "establishmentTiming.establishmentId",
+          foreignField: "_id",
           as: "establishmentMaster",
         },
       },
       {
         $unwind: {
           path: "$establishmentMaster",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $lookup: {
+          from: "hospitals",
+          localField: "establishmentMaster.hospitalId",
+          foreignField: "_id",
+          as: "hospitalData",
+        },
+      },
+      {
+        $unwind: {
+          path: "$hospitalData",
           preserveNullAndEmptyArrays: true,
         },
       },
@@ -1222,20 +1392,6 @@ const getDoctorProfile = async (condition) => {
         },
       },
       { $unwind: { path: "$state", preserveNullAndEmptyArrays: true } },
-      {
-        $lookup: {
-          from: "establishmenttimings",
-          localField: "establishmentMaster._id",
-          foreignField: "establishmentId",
-          as: "establishmentTiming",
-        },
-      },
-      {
-        $unwind: {
-          path: "$establishmentTiming",
-          preserveNullAndEmptyArrays: true,
-        },
-      },
       {
         $lookup: {
           from: "hospitaltypes",
@@ -1262,9 +1418,9 @@ const getDoctorProfile = async (condition) => {
             },
             establishmentDetails: {
               name: `$establishmentMaster.name`,
-              isOwner: `$establishmentMaster.isOwner`,
-              locality: `$establishmentMaster.locality`,
-              city: `$establishmentMaster.city`,
+              isOwner: `$doctor.isOwnEstablishment`,
+              locality: `$establishmentMaster.address.locality`,
+              city: `$establishmentMaster.address.city`,
               establishmentType: `$hospitalType.name`,
               hospitalTypeId: `$hospitalType._id`,
               hospitalId: `$establishmentMaster.hospitalId`,
@@ -1276,27 +1432,59 @@ const getDoctorProfile = async (condition) => {
               medicalProof: `$doctor.medicalProof`,
             },
             establishmentDetail: {
-              establishmentProof: `$establishmentMaster.establishmentProof`,
+              establishmentProof: {
+                $cond: {
+                  if: { $eq: ["$doctor.isOwnEstablishment", true] },
+                  then: `$establishmentMaster.establishmentProof`,
+                  else: `$establishmentTiming.establishmentProof`,
+                },
+              },
               propertyStatus: `$establishmentMaster.propertyStatus`,
             },
           },
           sectionC: {
             establishmentTiming: `$establishmentTiming`,
             address: `$establishmentMaster.address`,
+            location: `$establishmentMaster.location`,
+            isLocationShared: "$establishmentMaster.isLocationShared",
+            editAddress: {
+              $cond: {
+                if: {
+                  $eq: [
+                    "$hospitalData.isVerified",
+                    constants.PROFILE_STATUS.APPROVE,
+                  ],
+                },
+                then: false,
+                else: {
+                  $cond: {
+                    if: {
+                      $eq: ["$doctor.isOwnEstablishment", false],
+                    },
+                    then: false,
+                    else: true,
+                  },
+                },
+              },
+            },
           },
           _id: 1,
           doctorId: `$doctor._id`,
+          hospitalId: `$establishmentMaster.hospitalId`,
           establishmentMasterId: `$establishmentMaster._id`,
           establishmentMasterTimingId: `$establishmentTiming._id`,
           steps: `$doctor.steps`,
-          isApproved: `$doctor.isVerified`,
+          approvalStatus: `$doctor.isVerified`,
           phoneNumber: `$phone`,
           profileScreen: `$doctor.profileScreen`,
+          isOwnEstablishment: `$doctor.isOwnEstablishment`,
+          email: `$doctor.email`,
+          fullName: 1,
         },
       },
     ]);
     return data.length === 0 ? false : data;
-  } catch (err) {
+  } catch (error) {
     return false;
   }
 };
@@ -1327,33 +1515,9 @@ const getDoctorProfileAdmin = async (condition) => {
       },
       {
         $lookup: {
-          from: "establishmentmasters",
-          localField: "_id",
-          foreignField: "doctorId",
-          as: "establishmentMaster",
-        },
-      },
-      {
-        $unwind: {
-          path: "$establishmentMaster",
-          preserveNullAndEmptyArrays: true,
-        },
-      },
-      { $limit: 1 },
-      {
-        $lookup: {
-          from: "statemasters",
-          localField: "establishmentMaster.address.state",
-          foreignField: "_id",
-          as: "state",
-        },
-      },
-      { $unwind: { path: "$state", preserveNullAndEmptyArrays: true } },
-      {
-        $lookup: {
           from: "establishmenttimings",
-          localField: "establishmentMaster._id",
-          foreignField: "establishmentId",
+          localField: "doctor._id",
+          foreignField: "doctorId",
           as: "establishmentTiming",
         },
       },
@@ -1363,6 +1527,31 @@ const getDoctorProfileAdmin = async (condition) => {
           preserveNullAndEmptyArrays: true,
         },
       },
+      { $sort: { "establishmentTiming.createdAt": 1 } },
+      { $limit: 1 },
+      {
+        $lookup: {
+          from: "establishmentmasters",
+          localField: "establishmentTiming.establishmentId",
+          foreignField: "_id",
+          as: "establishmentMaster",
+        },
+      },
+      {
+        $unwind: {
+          path: "$establishmentMaster",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $lookup: {
+          from: "statemasters",
+          localField: "establishmentMaster.address.state",
+          foreignField: "_id",
+          as: "state",
+        },
+      },
+      { $unwind: { path: "$state", preserveNullAndEmptyArrays: true } },
       {
         $lookup: {
           from: "hospitaltypes",
@@ -1376,6 +1565,7 @@ const getDoctorProfileAdmin = async (condition) => {
         $project: {
           sectionA: {
             basicDetails: {
+              phone: { $ifNull: [`$phone`, null] },
               fullName: { $ifNull: [`$fullName`, null] },
               specialization: { $ifNull: [`$doctor.specialization`, null] },
               gender: { $ifNull: [`$doctor.gender`, null] },
@@ -1391,9 +1581,14 @@ const getDoctorProfileAdmin = async (condition) => {
             },
             establishmentDetail: {
               name: { $ifNull: [`$establishmentMaster.name`, null] },
-              isOwner: { $ifNull: [`$establishmentMaster.isOwner`, null] },
-              locality: { $ifNull: [`$establishmentMaster.locality`, null] },
-              city: { $ifNull: [`$establishmentMaster.city`, null] },
+              hospitalId: {
+                $ifNull: [`$establishmentMaster.hospitalId`, null],
+              },
+              isOwner: { $ifNull: [`$doctor.isOwnEstablishment`, null] },
+              locality: {
+                $ifNull: [`$establishmentMaster.address.locality`, null],
+              },
+              city: { $ifNull: [`$establishmentMaster.address.city`, null] },
               phone: { $ifNull: [`$phone`, null] },
               establishmentType: { $ifNull: [`$hospitalType.name`, null] },
               establishmentTypeId: { $ifNull: [`$hospitalType._id`, null] },
@@ -1406,7 +1601,11 @@ const getDoctorProfileAdmin = async (condition) => {
             },
             establishmentDetail: {
               establishmentProof: {
-                $ifNull: [`$establishmentMaster.establishmentProof`, null],
+                $cond: {
+                  if: { $eq: ["$doctor.isOwnEstablishment", true] },
+                  then: `$establishmentMaster.establishmentProof`,
+                  else: `$establishmentTiming.establishmentProof`,
+                },
               },
               propertyStatus: {
                 $ifNull: [`$establishmentMaster.propertyStatus`, null],
@@ -1415,9 +1614,13 @@ const getDoctorProfileAdmin = async (condition) => {
           },
           sectionC: {
             establishmentTiming: { $ifNull: [`$establishmentTiming`, null] },
+            location: {
+              $ifNull: [`$establishmentMaster.location`, null],
+            },
+            isLocationShared: "$establishmentMaster.isLocationShared",
             address: {
               street: {
-                $ifNull: [`$establishmentMaster.address.street`, null],
+                $ifNull: [`$establishmentMaster.address.landmark`, null],
               },
               locality: {
                 $ifNull: [`$establishmentMaster.address.locality`, null],
@@ -1447,57 +1650,146 @@ const getDoctorProfileAdmin = async (condition) => {
       },
     ]);
     return data.length === 0 ? false : data;
-  } catch (err) {
+  } catch (error) {
     return false;
   }
 };
 
-const findAllDoctorByCity = async (condition) => {
+const findAllDoctorByCity = async (cityList) => {
   try {
-    const data = await CityMaster.model.aggregate([
+    return await EstablishmentTiming.model.aggregate([
+      {
+        $match: {
+          isDeleted: false,
+          doctorId: { $exists: true },
+          isVerified: constants.PROFILE_STATUS.APPROVE,
+        },
+      },
       {
         $lookup: {
-          from: "specializations",
-          pipeline: [
-            {
-              $match: {},
-            },
-            {
-              $project: {
-                _id: 1,
-                name: 1,
-                image: 1,
-                cityCode: "$code",
-              },
-            },
-          ],
-          as: "specializations",
+          from: "establishmentmasters",
+          localField: "establishmentId",
+          foreignField: "_id",
+          as: "establishmentData",
         },
       },
       {
         $unwind: {
-          path: "$specializations",
+          path: "$establishmentData",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      { $match: { "establishmentData.address.city": { $in: cityList } } },
+      {
+        $lookup: {
+          from: "hospitals",
+          localField: "establishmentData.hospitalId",
+          foreignField: "_id",
+          as: "hospitalData",
+        },
+      },
+      {
+        $unwind: { path: "$hospitalData", preserveNullAndEmptyArrays: true },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "hospitalData.userId",
+          foreignField: "_id",
+          as: "userData",
+        },
+      },
+      {
+        $unwind: {
+          path: "$userData",
           preserveNullAndEmptyArrays: true,
         },
       },
       {
-        $group: {
-          _id: "$_id",
-          code: { $first: "$code" },
-          name: { $first: "$name" },
-          stateId: { $first: "$stateId" },
-          status: { $first: "$status" },
-          createdBy: { $first: "$createdBy" },
-          modifiedBy: { $first: "$modifiedBy" },
-          createdAt: { $first: "$createdAt" },
-          updatedAt: { $first: "$updatedAt" },
-          specializations: { $push: "$specializations" },
+        $match: {
+          "userData.isDeleted": false,
+          "userData.status": constants.PROFILE_STATUS.ACTIVE,
+          "hospitalData.steps": constants.PROFILE_STEPS.COMPLETED,
+          "hospitalData.isVerified": constants.PROFILE_STATUS.APPROVE,
         },
       },
+      {
+        $lookup: {
+          from: "doctors",
+          localField: "doctorId",
+          foreignField: "_id",
+          as: "doctorData",
+        },
+      },
+      {
+        $unwind: {
+          path: "$doctorData",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "doctorData.userId",
+          foreignField: "_id",
+          as: "doctorUser",
+        },
+      },
+      {
+        $unwind: {
+          path: "$doctorUser",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $match: {
+          "doctorUser.isDeleted": false,
+          "doctorUser.status": constants.PROFILE_STATUS.ACTIVE,
+          "doctorData.steps": constants.PROFILE_STEPS.COMPLETED,
+          "doctorData.isVerified": constants.PROFILE_STATUS.APPROVE,
+        },
+      },
+      {
+        $lookup: {
+          from: "specializations",
+          localField: "doctorData.specialization",
+          foreignField: "_id",
+          as: "specializationMaster",
+        },
+      },
+      {
+        $unwind: {
+          path: "$specializationMaster",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $project: {
+          name: `$establishmentData.address.city`,
+          specialization: `$specializationMaster`,
+        },
+      },
+      {
+        $group: {
+          _id: { city: `$name`, specialization: "$specialization.name" },
+          count: { $sum: 1 },
+        },
+      },
+      {
+        $group: {
+          _id: "$_id.city",
+          specializations: {
+            $push: {
+              name: "$_id.specialization",
+              count: "$count",
+            },
+          },
+          totalCount: { $sum: "$count" },
+        },
+      },
+      { $sort: { totalCount: -1 } },
     ]);
-    console.log(data);
-    return data;
-  } catch (err) {
+  } catch (error) {
     return false;
   }
 };
@@ -1515,7 +1807,10 @@ const establishmentList = async (condition, limit, skip) => {
         },
       },
       {
-        $unwind: { path: "$establishmentData", preserveNullAndEmptyArrays: true, }
+        $unwind: {
+          path: "$establishmentData",
+          preserveNullAndEmptyArrays: true,
+        },
       },
       {
         $lookup: {
@@ -1526,7 +1821,10 @@ const establishmentList = async (condition, limit, skip) => {
         },
       },
       {
-        $unwind: { path: "$hospitalTypeData", preserveNullAndEmptyArrays: true, }
+        $unwind: {
+          path: "$hospitalTypeData",
+          preserveNullAndEmptyArrays: true,
+        },
       },
       {
         $lookup: {
@@ -1537,7 +1835,18 @@ const establishmentList = async (condition, limit, skip) => {
         },
       },
       {
-        $unwind: { path: "$hospitalData", preserveNullAndEmptyArrays: true, }
+        $unwind: { path: "$hospitalData", preserveNullAndEmptyArrays: true },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "hospitalData.userId",
+          foreignField: "_id",
+          as: "userData",
+        },
+      },
+      {
+        $unwind: { path: "$userData", preserveNullAndEmptyArrays: true },
       },
       {
         $project: {
@@ -1552,18 +1861,25 @@ const establishmentList = async (condition, limit, skip) => {
           fri: 1,
           sat: 1,
           sun: 1,
+          isActive: 1,
           hospitalData: {
-            profilePic: "$hospitalData.profilePic",
+            profilePic: { $ifNull: [`$hospitalData.profilePic`, null] },
             address: "$hospitalData.address",
             location: "$hospitalData.location",
-          },
-          estabMasterData: {
+            isLocationShared: "$hospitalData.isLocationShared",
             name: "$establishmentData.name",
-            address:"$establishmentData.address",
-            location:"$establishmentData.location",
-            hospitalId:"$establishmentData.hospitalId"
+            hospitalId: "$establishmentData.hospitalId",
+            establishmentMobile: {
+              $ifNull: [`$userData.phone`, null],
+            },
+            establishmentEmail: {
+              $ifNull: [`$establishmentData.establishmentEmail`, null],
+            },
           },
-          hospitalTypeData: '$hospitalTypeData.name'
+          hospitalTypeId: {
+            $ifNull: [`$establishmentData.hospitalTypeId`, null],
+          },
+          hospitalTypeData: { $ifNull: [`$hospitalTypeData.name`, null] },
         },
       },
       {
@@ -1579,7 +1895,7 @@ const establishmentList = async (condition, limit, skip) => {
       },
     ]);
     return data[0];
-  } catch (err) {
+  } catch (error) {
     return false;
   }
 };
@@ -1588,7 +1904,7 @@ const establishmentRequest = async (condition, limit, skip, sortBy, order) => {
   try {
     const sortObject = { sortBy: constants.LIST.ORDER[order] };
     if (sortBy === "fullName") {
-      sortObject["hospitalName.fullName"] = constants.LIST.ORDER[order];
+      sortObject["estabMasterData.name"] = constants.LIST.ORDER[order];
     }
 
     const data = await EstablishmentTiming.model.aggregate([
@@ -1600,6 +1916,9 @@ const establishmentRequest = async (condition, limit, skip, sortBy, order) => {
           foreignField: "_id",
           as: "estabMasterData",
         },
+      },
+      {
+        $unwind: { path: "$estabMasterData", preserveNullAndEmptyArrays: true },
       },
       {
         $lookup: {
@@ -1644,12 +1963,13 @@ const establishmentRequest = async (condition, limit, skip, sortBy, order) => {
       // },{$arrayElemAt: ['$hospitalName.fullName', 0]},
       {
         $project: {
-          hospitalName: "$hospitalName.fullName",
+          hospitalName: "$estabMasterData.name",
           profilePic: "$hospitalData.profilePic",
           hospitalType: 1,
           isVerified: 1,
           specilityData: 1,
           establishmentId: 1,
+          isActive: 1,
         },
       },
       {
@@ -1665,40 +1985,25 @@ const establishmentRequest = async (condition, limit, skip, sortBy, order) => {
       },
     ]);
     return data;
-  } catch (err) {
+  } catch (error) {
     return false;
   }
 };
 
-const getSortObject = (sortBy, order) => {
-  console.log(sortBy);
-  let sortObject = {};
-  if (sortBy === "0") {
-    sortObject["createdAt"] = Number(order);
-  }
-  if (sortBy === "1") {
-    sortObject["_id"] = 1;
-    sortObject["specialization.name"] = Number(order);
-  } else if (sortBy === "2") {
-    sortObject["education.degreeName"] = Number(order); // add degreeName field
-  } else if (sortBy === "3") {
-    sortObject["fullName"] = Number(order); // add degreeName field
-  }
-  return sortObject;
-};
-
 const adminDoctorList = async (
   condition,
+  doctorQuery,
   limit,
   skip,
-  sortBy,
-  order,
+  sortCondition,
   search,
   isExport
 ) => {
   try {
+    const { sortBy, order } = sortCondition;
     const matchSearch = {};
-    const sortObject = { sortBy: constants.LIST.ORDER[order] };
+    const sortObject = {};
+    sortObject[sortBy] = constants.LIST.ORDER[order];
     if (sortBy === "fullName") {
       sortObject["doctorDetails.fullName"] = constants.LIST.ORDER[order];
     }
@@ -1719,8 +2024,8 @@ const adminDoctorList = async (
       data: [],
     };
     if (!isExport) {
-      facetObject.data.push({ $skip: Number(skip) }),
-        facetObject.data.push({ $limit: Number(limit) });
+      facetObject.data.push({ $skip: Number(skip) });
+      facetObject.data.push({ $limit: Number(limit) });
     }
     const data = await Doctor.model.aggregate([
       { $match: condition },
@@ -1731,7 +2036,15 @@ const adminDoctorList = async (
           pipeline: [
             { $match: { $expr: { $eq: ["$_id", "$$userId"] } } },
             {
-              $project: { id: "$_id", _id: 0, fullName: 1, phone: 1 },
+              $project: {
+                id: "$_id",
+                _id: 0,
+                fullName: 1,
+                phone: 1,
+                status: 1,
+                isDeleted: 1,
+                profileSlug: 1
+              },
             },
           ],
           as: "doctorDetails",
@@ -1739,6 +2052,34 @@ const adminDoctorList = async (
       },
       { $unwind: { path: "$doctorDetails", preserveNullAndEmptyArrays: true } },
       { $match: matchSearch },
+      { $match: doctorQuery },
+      {
+        $lookup: {
+          from: "establishmenttimings",
+          let: { doctorId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$doctorId", "$$doctorId"] },
+                    { $eq: ["$isDeleted", false] },
+                  ],
+                },
+              },
+            },
+            { $sort: { isVerified: -1, isActive: -1, createdAt: -1 } },
+            { $limit: 1 },
+          ],
+          as: "establishmenttiming",
+        },
+      },
+      {
+        $unwind: {
+          path: "$establishmenttiming",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
       {
         $lookup: {
           from: "specializations",
@@ -1747,39 +2088,26 @@ const adminDoctorList = async (
           as: "specialization",
         },
       },
-      // {
-      //   $unwind: { path: "$specialization", preserveNullAndEmptyArrays: true },
-      // },
       {
         $lookup: {
           from: "establishmentmasters",
-          let: { userId: "$userId" },
+          let: { establishmentId: "$establishmenttiming.establishmentId" },
           pipeline: [
-            { $match: { $expr: { $eq: ["$doctorId", "$$userId"] } } }, //_id
+            { $match: { $expr: { $eq: ["$_id", "$$establishmentId"] } } },
             {
               $project: {
-                id: "$_id",
-                _id: 0,
+                _id: 1,
+                name: 1,
                 address: 1,
                 location: 1,
                 isOwner: 1,
+                isLocationShared: 1,
               },
             },
           ],
           as: "localityDetails",
         },
       },
-      // {
-      //   $lookup:{
-      //     from:"establishmentmasters",
-      //     localField:"_id",
-      //     foreignField:"doctorId",
-      //     as:"localityDetails"
-      //   }
-      // },
-      // {
-      //   $unwind: { path: "$localityDetails", preserveNullAndEmptyArrays: true },
-      // },
       {
         $lookup: {
           from: "statemasters",
@@ -1788,37 +2116,26 @@ const adminDoctorList = async (
           as: "stateDetails",
         },
       },
-      // {
-      //   $unwind: { path: "$specialization", preserveNullAndEmptyArrays: true },
-      // },
+      {
+        $addFields: {
+          approvalStatus: "$isVerified",
+        },
+      },
       { $sort: sortObject },
-
-      // {
-      //   $project:{
-      //     profilePic:1,
-      //     education:1,
-      //     email:1,
-      //     status:1,
-      //     doctorDetails:1,
-      //     createdAt:1,
-      //     specialization:1,
-      //     city:1
-      //   }
-      // },
-
       {
         $facet: facetObject,
       },
     ]);
     return data;
-  } catch (err) {
-    console.log("🚀 ~ file: doctor.js:1093 ~ adminDoctorList ~ err:", err);
+  } catch (error) {
+    console.log(error);
     return false;
   }
 };
 
 const doctorListForApprove = async (
   condition,
+  doctorQuery,
   limit,
   skip,
   sortBy,
@@ -1827,7 +2144,8 @@ const doctorListForApprove = async (
 ) => {
   try {
     const matchSearch = {};
-    const sortObject = { sortBy: constants.LIST.ORDER[order] };
+    const sortObject = {};
+    sortObject[sortBy] = constants.LIST.ORDER[order];
     if (sortBy === "fullName") {
       sortObject["doctorDetails.fullName"] = constants.LIST.ORDER[order];
     }
@@ -1854,6 +2172,7 @@ const doctorListForApprove = async (
         },
       },
       { $match: matchSearch },
+      // { $match: doctorQuery },
       {
         $lookup: {
           from: "specializations",
@@ -1885,16 +2204,15 @@ const doctorListForApprove = async (
 
       {
         $project: {
-          userId:1,
-          profilePic:1,
-          createdAt:1,
+          userId: 1,
+          profilePic: 1,
+          createdAt: 1,
           doctorDetails: 1,
           specializationDetails: 1,
           localityDetails: 1,
-          city:1,
-          isVerified:1,
-          rejectReason:1
-
+          city: 1,
+          isVerified: 1,
+          rejectReason: 1,
         },
       },
       // { $sort: sortObject },
@@ -1904,49 +2222,41 @@ const doctorListForApprove = async (
           data: [{ $skip: Number(skip) }, { $limit: Number(limit) }],
         },
       },
-      {
-        $addFields: {
-          count: { $arrayElemAt: ["$count.count", 0] },
-        },
-      },
-
+      // {
+      //   $addFields: {
+      //     count: { $arrayElemAt: ["$count.count", 0] },
+      //   },
+      // },
     ]);
     return data[0];
-  } catch (err) {
+  } catch (error) {
     return false;
   }
 };
 
-const specializationList = async (
-  condition,
-  limit,
-  skip,
-  sort,
-  order,
-  search
-) => {
+const specializationList = async () => {
   try {
-    const matchSearch = {};
     const data = await Specialization.model.aggregate([
+      { $match: { isDeleted: false } },
       {
         $lookup: {
           from: "doctors",
           localField: "_id",
           foreignField: "specialization",
-          as: "doctors_specialization",
+          as: "doctorSpecializations",
         },
       },
       {
         $project: {
           _id: 1,
           name: "$name",
-          count: { $size: "$doctors_specialization" },
+          count: { $size: "$doctorSpecializations" },
           image: 1,
         },
       },
     ]);
     return data;
-  } catch (err) {
+  } catch (error) {
     return false;
   }
 };
@@ -1966,15 +2276,15 @@ const getProfile = async (condition) => {
       { $unwind: { path: "$doctor", preserveNullAndEmptyArrays: true } },
     ]);
     return data.length === 0 ? false : data;
-  } catch (err) {
+  } catch (error) {
     return false;
   }
 };
 
-const doctorAboutUs = async (doctorId) => {
+const doctorAboutUs = async (condition) => {
   try {
     const data = await Doctor.model.aggregate([
-      { $match: { _id: new Types.ObjectId(doctorId) } },
+      { $match: condition },
       {
         $lookup: {
           from: "users",
@@ -1985,19 +2295,80 @@ const doctorAboutUs = async (doctorId) => {
       },
       { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
       {
-        $lookup: {
-          from: "establishmentmasters",
-          localField: "_id",
-          foreignField: "doctorId",
-          as: "establishmentmaster",
+        $match: {
+          "user.isDeleted": false,
         },
       },
       {
         $lookup: {
           from: "establishmenttimings",
-          localField: "establishmentmasters._id",
-          foreignField: "establishment",
+          let: { doctorId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$doctorId", "$$doctorId"] },
+                    { $eq: ["$isVerified", 2] },
+                    { $eq: ["$isDeleted", false] },
+                  ],
+                },
+              },
+            },
+          ],
           as: "establishmenttiming",
+        },
+      },
+      {
+        $lookup: {
+          from: "socialmedias",
+          localField: "social.socialMediaId",
+          foreignField: "_id",
+          as: "socialMediaMaster",
+        },
+      },
+      {
+        $addFields: {
+          social: {
+            $map: {
+              input: "$social",
+              as: "socialMedia",
+              in: {
+                $mergeObjects: [
+                  "$$socialMedia",
+                  {
+                    socialmedias: {
+                      $arrayElemAt: [
+                        "$socialMediaMaster",
+                        {
+                          $indexOfArray: [
+                            "$socialMediaMaster._id",
+                            "$$socialMedia.socialMediaId",
+                          ],
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: "establishmentmasters",
+          localField: "establishmenttiming.establishmentId",
+          foreignField: "_id",
+          as: "establishmentmaster",
+        },
+      },
+      {
+        $lookup: {
+          from: "hospitals",
+          localField: "establishmentmaster.hospitalId",
+          foreignField: "_id",
+          as: "hospital",
         },
       },
       {
@@ -2005,10 +2376,69 @@ const doctorAboutUs = async (doctorId) => {
           from: "hospitaltypes",
           localField: "establishmentmaster.hospitalTypeId",
           foreignField: "_id",
-          as: "hospitalType",
+          as: "establishmentTypeMaster",
         },
       },
-      { $unwind: { path: "$hospitalType", preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: "statemasters",
+          localField: "establishmentmaster.address.state",
+          foreignField: "_id",
+          as: "stateName",
+        },
+      },
+      {
+        $addFields: {
+          hospitalType: {
+            $map: {
+              input: "$establishmentmaster",
+              as: "hospitalTypeMaster",
+              in: {
+                $mergeObjects: [
+                  "$$hospitalTypeMaster",
+                  {
+                    establishmentTypeMaster: {
+                      $arrayElemAt: [
+                        "$establishmentTypeMaster",
+                        {
+                          $indexOfArray: [
+                            "$establishmentTypeMaster._id",
+                            "$$hospitalTypeMaster.hospitalTypeId",
+                          ],
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          },
+          stateName: {
+            $map: {
+              input: "$establishmentmaster",
+              as: "establishmentMaster",
+              in: {
+                $mergeObjects: [
+                  "$$establishmentMaster",
+                  {
+                    stateName: {
+                      $arrayElemAt: [
+                        "$stateName",
+                        {
+                          $indexOfArray: [
+                            "$stateName._id",
+                            "$$establishmentMaster.address.state",
+                          ],
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
       {
         $lookup: {
           from: "specializations",
@@ -2018,10 +2448,18 @@ const doctorAboutUs = async (doctorId) => {
         },
       },
       {
+        $addFields: {
+          consultationFees: {
+            $arrayElemAt: ["$establishmenttiming.consultationFees", 0],
+          },
+        },
+      },
+      {
         $project: {
           _id: 1,
           userId: 1,
           specialization: 1,
+          master: 1,
           email: 1,
           gender: 1,
           medicalRegistration: 1,
@@ -2035,10 +2473,11 @@ const doctorAboutUs = async (doctorId) => {
           about: 1,
           publicUrl: 1,
           rating: 1,
+          consultationFees: 1,
           recommended: 1,
+          doctorProfileSlug: `$profileSlug`,
           fullName: "$user.fullName",
           phone: "$user.phone",
-          rating: 1,
           establishmentmaster: {
             $map: {
               input: "$establishmentmaster",
@@ -2078,7 +2517,77 @@ const doctorAboutUs = async (doctorId) => {
                         },
                       },
                     },
-                    hospitalType: "$hospitalType.name",
+                    isActive: {
+                      $let: {
+                        vars: {
+                          matchingEstablishmentTiming: {
+                            $filter: {
+                              input: "$establishmenttiming",
+                              as: "et",
+                              cond: {
+                                $eq: ["$$et.establishmentId", "$$em._id"],
+                              },
+                            },
+                          },
+                        },
+                        in: {
+                          $ifNull: [
+                            {
+                              $first: "$$matchingEstablishmentTiming.isActive",
+                            },
+                            null,
+                          ],
+                        },
+                      },
+                    },
+                    stateName: "$stateName.stateName.name",
+                    hospitalType: "$hospitalType.establishmentTypeMaster.name",
+                    images: {
+                      $let: {
+                        vars: {
+                          matchingHospital: {
+                            $filter: {
+                              input: "$hospital",
+                              as: "hos",
+                              cond: {
+                                $eq: ["$$hos._id", "$$em.hospitalId"],
+                              },
+                            },
+                          },
+                        },
+                        in: {
+                          $ifNull: [
+                            {
+                              $first: "$$matchingHospital.image",
+                            },
+                            null,
+                          ],
+                        },
+                      },
+                    },
+                    profilePic: {
+                      $let: {
+                        vars: {
+                          matchingHospital: {
+                            $filter: {
+                              input: "$hospital",
+                              as: "hos",
+                              cond: {
+                                $eq: ["$$hos._id", "$$em.hospitalId"],
+                              },
+                            },
+                          },
+                        },
+                        in: {
+                          $ifNull: [
+                            {
+                              $first: "$$matchingHospital.profilePic",
+                            },
+                            null,
+                          ],
+                        },
+                      },
+                    },
                   },
                 ],
               },
@@ -2091,28 +2600,13 @@ const doctorAboutUs = async (doctorId) => {
               else: true,
             },
           },
-          totalReview:'4'
-        },
-      },
-      {
-        $addFields: {
-          "establishmentmaster.totalReview": 453,
-          "establishmentmaster.totalRating": 4.5,
-          "establishmentmaster.consultationFees": {
-            $first: "$establishmentmaster.consultationFees",
-          },
-        },
-      },
-      {
-        $addFields: {
-          consultationFees: {
-            $arrayElemAt: ["$establishmentmaster.consultationFees", 0],
-          },
+          totalReview: { $ifNull: [`$totalreviews`, 0] },
         },
       },
     ]);
     return data.length === 0 ? false : data;
-  } catch (err) {
+  } catch (error) {
+    console.log(error);
     return false;
   }
 };
@@ -2141,14 +2635,15 @@ const getForSetting = async (model, condition) => {
         $project: {
           _id: "$social._id",
           socialMediaId: "$socialMedia._id",
-          socialMediaName: "$socialMedia.name",
+          name: "$socialMedia.name",
           socialMediaLogo: "$socialMedia.logo",
+          url: "$social.url",
         },
       },
     ]);
     return data.length === 0 ? false : data;
-  } catch (err) {
-    console.log(err);
+  } catch (error) {
+    console.log(error);
     return false;
   }
 };
@@ -2254,8 +2749,8 @@ const doctorList = async (
       },
     ]);
     return data[0];
-  } catch (err) {
-    console.log(err);
+  } catch (error) {
+    console.log(error);
     return false;
   }
 };
@@ -2271,40 +2766,46 @@ const similarRecord = async (Model, condition, records, recordKey) => {
       }
     }
     const data = await Model.findOne(conditionObject).lean();
-    return data ? true : false;
+    return data;
   } catch (error) {
     console.log(error);
     return false;
   }
 };
 
-const doctorListBasedOnEstablishmentSpecility = async (
+const doctorListBasedOnProcedure = async (
   establishmentId,
-  condition ,
-  speciality ,
+  condition,
+  procedure,
   offset,
-  limit
+  limit,
+  search,
+  speciality
 ) => {
   let filters = {};
   try {
+    const searchQuery = search || "";
     if (condition) {
       filters = {
-        "specialization.name": {
+        "procedure.name": {
           $regex: new RegExp(`^${condition}`, "i"),
         },
       };
     }
     if (speciality) {
       filters = {
-        specility: {
-          $elemMatch: {
-            $eq: new Types.ObjectId(speciality),
-          },
-        },
+        "specialization._id": new Types.ObjectId(speciality),
       };
     }
     const data = await EstablishmentTiming.model.aggregate([
-      { $match: { establishmentId: new Types.ObjectId(establishmentId) } },
+      {
+        $match: {
+          establishmentId: new Types.ObjectId(establishmentId),
+          isVerified: 2,
+          isDeleted: false,
+          doctorId: { $exists: true },
+        },
+      },
       {
         $lookup: {
           from: "doctors",
@@ -2316,6 +2817,34 @@ const doctorListBasedOnEstablishmentSpecility = async (
       { $unwind: { path: "$doctor", preserveNullAndEmptyArrays: true } },
       {
         $lookup: {
+          from: "establishmentmasters",
+          localField: "establishmentId",
+          foreignField: "_id",
+          as: "establishmentMaster",
+        },
+      },
+      {
+        $unwind: {
+          path: "$establishmentMaster",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $lookup: {
+          from: "hospitaltypes",
+          localField: "hospitalTypeId",
+          foreignField: "_id",
+          as: "hospitalTypeMaster",
+        },
+      },
+      {
+        $unwind: {
+          path: "$hospitalTypeMaster",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $lookup: {
           from: "users",
           localField: "doctor.userId",
           foreignField: "_id",
@@ -2324,9 +2853,25 @@ const doctorListBasedOnEstablishmentSpecility = async (
       },
       { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
       {
+        $match: {
+          "doctor.isVerified": constants.PROFILE_STATUS.APPROVE,
+          "doctor.steps": constants.PROFILE_STEPS.COMPLETED,
+          "user.isDeleted": false,
+          "user.status": constants.PROFILE_STATUS.ACTIVE,
+        },
+      },
+      {
+        $lookup: {
+          from: "proceduremasters",
+          localField: "doctor.procedure",
+          foreignField: "_id",
+          as: "procedure",
+        },
+      },
+      {
         $lookup: {
           from: "specializations",
-          localField: "specility",
+          localField: "doctor.specialization",
           foreignField: "_id",
           as: "specialization",
         },
@@ -2335,21 +2880,34 @@ const doctorListBasedOnEstablishmentSpecility = async (
         $match: filters,
       },
       {
+        $match: {
+          $or: [
+            {
+              "user.fullName": { $regex: new RegExp(searchQuery, "i") },
+            },
+          ],
+        },
+      },
+      {
         $project: {
           _id: 1,
+          isActive: 1,
           userId: 1,
-          specialization: 1,
+          doctorId: 1,
+          establishmentId: 1,
+          procedure: 1,
           experience: "$doctor.experience",
-          reviews: "200",
+          reviews: { $ifNull: [`$doctor.totalreviews`, null] },
+          doctorProfileSlug: { $ifNull: [`$doctor.profileSlug`, null] },
           consultationFees: 1,
           service: 1,
-          experience: "$doctor.experience",
+          specialization: 1,
           profilePic: "$doctor.profilePic",
           rating: "$doctor.rating",
           recommended: "$doctor.recommended",
           fullName: "$user.fullName",
           phone: "$user.phone",
-          rating: "$doctor.rating",
+          hospitalTypeMaster: 1,
           establishmentTiming: {
             mon: "$mon",
             tue: "$tue",
@@ -2359,7 +2917,40 @@ const doctorListBasedOnEstablishmentSpecility = async (
             sat: "$sat",
             sun: "$sun",
           },
-          waitTime: "Less than 15 minutes",
+          waitTime: {
+            $cond: {
+              if: {
+                $gte: ["$doctor.waitTime", 0.75],
+              },
+              then: "15 mins",
+              else: {
+                $cond: {
+                  if: {
+                    $gte: ["$doctor.waitTime", 0.5],
+                  },
+                  then: "30 mins",
+                  else: {
+                    $cond: {
+                      if: {
+                        $gte: ["$doctor.waitTime", 0.25],
+                      },
+                      then: "45 mins",
+                      else: {
+                        $cond: {
+                          if: {
+                            $gt: ["$doctor.waitTime", 0],
+                          },
+                          then: "60 mins",
+                          else: constants.NA,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          establishmentMaster: 1,
         },
       },
       {
@@ -2386,39 +2977,52 @@ const doctorListBasedOnEstablishmentSpecility = async (
         },
       },
     ]);
-    console.log(data);
     return data.length === 0 ? false : data;
-  } catch (err) {
+  } catch (error) {
+    console.log(error);
     return false;
   }
 };
 
-const establishmentSpecialityList = async (establishmentId, condition = {}) => {
+const establishmentProcedureList = async (establishmentId, condition = "") => {
   try {
-    const data = await EstablishmentTiming.model.aggregate([
-      { $match: { establishmentId: new Types.ObjectId(establishmentId) } },
+    const data = await EstablishmentMaster.model.aggregate([
       {
-        $lookup: {
-          from: "specializations",
-          localField: "specility",
-          foreignField: "_id",
-          as: "specialization",
+        $match: {
+          _id: new Types.ObjectId(establishmentId),
         },
       },
       {
-        $unwind: { path: "$specialization", preserveNullAndEmptyArrays: true },
+        $lookup: {
+          from: "hospitals",
+          localField: "hospitalId",
+          foreignField: "_id",
+          as: "hospital",
+        },
+      },
+      { $unwind: { path: "$hospital", preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: "proceduremasters",
+          localField: "hospital.procedure",
+          foreignField: "_id",
+          as: "procedure",
+        },
+      },
+      {
+        $unwind: { path: "$procedure", preserveNullAndEmptyArrays: true },
       },
       {
         $match: {
-          "specialization.name": {
+          "procedure.name": {
             $regex: new RegExp(`^${condition}`, "i"),
           },
         },
       },
       {
         $group: {
-          _id: "$specialization._id",
-          name: { $first: "$specialization.name" },
+          _id: "$procedure._id",
+          name: { $first: "$procedure.name" },
         },
       },
       {
@@ -2430,24 +3034,104 @@ const establishmentSpecialityList = async (establishmentId, condition = {}) => {
     ]);
 
     return data.length === 0 ? false : data;
-  } catch (err) {
+  } catch (error) {
+    console.log(error);
+    return false;
+  }
+};
+
+const establishmentProcedureListNoFilter = async (establishmentId) => {
+  try {
+    const data = await EstablishmentMaster.model.aggregate([
+      {
+        $match: {
+          _id: new Types.ObjectId(establishmentId),
+        },
+      },
+      {
+        $lookup: {
+          from: "hospitals",
+          localField: "hospitalId",
+          foreignField: "_id",
+          as: "hospital",
+        },
+      },
+      { $unwind: { path: "$hospital", preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: "proceduremasters",
+          localField: "hospital.procedure",
+          foreignField: "_id",
+          as: "procedure",
+        },
+      },
+      {
+        $unwind: { path: "$procedure", preserveNullAndEmptyArrays: true },
+      },
+      {
+        $group: {
+          _id: "$procedure._id",
+          name: { $first: "$procedure.name" },
+        },
+      },
+      { $match: { _id: { $ne: null } } },
+      {
+        $project: {
+          _id: 1,
+          name: 1,
+        },
+      },
+      { $sort: { name: 1 } },
+    ]);
+
+    return data.length === 0 ? false : data;
+  } catch (error) {
+    console.log(error);
     return false;
   }
 };
 
 const specialityFirstLetterList = async (establishmentId, condition) => {
   try {
-    const data = await EstablishmentTiming.model.aggregate([
-      { $match: { establishmentId: new Types.ObjectId(establishmentId) } },
+    const data = await EstablishmentMaster.model.aggregate([
+      {
+        $match: {
+          _id: new Types.ObjectId(establishmentId),
+        },
+      },
       {
         $lookup: {
-          from: "specializations",
-          localField: "specility",
+          from: "hospitals",
+          localField: "hospitalId",
+          foreignField: "_id",
+          as: "hospital",
+        },
+      },
+      {
+        $unwind: { path: "$hospital", preserveNullAndEmptyArrays: true },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "hospital.userId",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      {
+        $unwind: { path: "$user", preserveNullAndEmptyArrays: true },
+      },
+      {
+        $lookup: {
+          from: "proceduremasters",
+          localField: "hospital.procedure",
           foreignField: "_id",
           as: "specialization",
         },
       },
-      { $unwind: "$specialization" },
+      {
+        $unwind: "$specialization",
+      },
       {
         $group: {
           _id: { $substr: ["$specialization.name", 0, 1] },
@@ -2470,31 +3154,121 @@ const specialityFirstLetterList = async (establishmentId, condition) => {
     }));
 
     // Update the status of the alphabets found in the data
-    data.forEach(({ name }) => {
-      const firstLetter = name[0].toUpperCase();
-      const index = firstLetter.charCodeAt(0) - 65;
-      if (index >= 0 && index < 26) {
-        alphabetStatus[index].status = 1;
-      }
-    });
-
-    return alphabetStatus;
-  } catch (err) {
+    return alphabetStatusParser(data, alphabetStatus);
+  } catch (error) {
     return false;
   }
 };
 
-const establishmentspecialityListDoc = async (establishmentId, condition) => {
+const procedureHospitalDoctorWiseList = async (establishmentId, condition) => {
   try {
     const data = await EstablishmentTiming.model.aggregate([
-      { $match: { establishmentId: new Types.ObjectId(establishmentId) } },
       {
-        $unwind: "$specility",
+        $match: {
+          establishmentId: new Types.ObjectId(establishmentId),
+          isDeleted: false,
+          isVerified: constants.PROFILE_STATUS.APPROVE,
+          doctorId: { $exists: true },
+          isActive: true,
+        },
+      },
+      {
+        $lookup: {
+          from: "doctors",
+          localField: "doctorId",
+          foreignField: "_id",
+          as: "doctor",
+        },
+      },
+      {
+        $unwind: { path: "$doctor", preserveNullAndEmptyArrays: true },
+      },
+      {
+        $lookup: {
+          from: "proceduremasters",
+          localField: "doctor.procedures",
+          foreignField: "_id",
+          as: "procedure",
+        },
+      },
+      { $unwind: "$procedure" },
+      {
+        $group: {
+          _id: { $substr: ["$procedure.name", 0, 1] },
+          count: { $sum: 1 },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          name: "$_id",
+          status: { $cond: [{ $gt: ["$count", 0] }, 1, 0] },
+        },
+      },
+    ]);
+
+    // Initialize an array of objects with all the alphabets and status 0
+    const alphabetStatus = Array.from({ length: 26 }, (_, i) => ({
+      name: String.fromCharCode(65 + i),
+      status: 0,
+    }));
+
+    // Update the status of the alphabets found in the data
+    return alphabetStatusParser(data, alphabetStatus);
+  } catch (error) {
+    return false;
+  }
+};
+
+const establishmentspecialityListDoc = async (
+  establishmentId,
+  condition = null
+) => {
+  try {
+    const data = await EstablishmentTiming.model.aggregate([
+      {
+        $match: {
+          establishmentId: new Types.ObjectId(establishmentId),
+          isVerified: 2,
+          isDeleted: false,
+          doctorId: { $exists: true },
+          isActive: true,
+        },
+      },
+      {
+        $lookup: {
+          from: "doctors",
+          localField: "doctorId",
+          foreignField: "_id",
+          as: "doctor",
+        },
+      },
+      {
+        $unwind: { path: "$doctor", preserveNullAndEmptyArrays: true },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "doctor.userId",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      {
+        $unwind: { path: "$user", preserveNullAndEmptyArrays: true },
+      },
+      {
+        $match: {
+          "user.isDeleted": false,
+          "user.status": constants.PROFILE_STATUS.ACTIVE,
+          "doctor.isVerified": constants.PROFILE_STATUS.APPROVE,
+          "doctor.steps": constants.PROFILE_STEPS.COMPLETED,
+        },
       },
       {
         $lookup: {
           from: "specializations",
-          localField: "specility",
+          localField: "doctor.specialization",
           foreignField: "_id",
           as: "specialization",
         },
@@ -2526,7 +3300,586 @@ const establishmentspecialityListDoc = async (establishmentId, condition) => {
       },
     ]);
     return data;
-  } catch (err) {
+  } catch (error) {
+    return false;
+  }
+};
+
+const doctorDetails = async (condition) => {
+  try {
+    const data = await Doctor.model.aggregate([
+      { $match: condition },
+      {
+        $lookup: {
+          from: "users",
+          let: { userId: "$userId" },
+          pipeline: [
+            { $match: { $expr: { $eq: ["$_id", "$$userId"] } } },
+            {
+              $project: {
+                phone: 1,
+                fullName: 1,
+              },
+            },
+          ],
+          as: "userData",
+        },
+      },
+      {
+        $addFields: { userData: { $arrayElemAt: ["$userData", 0] } },
+      },
+      // {
+      //   $lookup: {
+      //     from: "specializations",
+      //     localField: "specialization",
+      //     foreignField: "_id",
+      //     as: "specialization",
+      //   },
+      // },
+      // {
+      //   $unwind: {
+      //     path: "$specialization",
+      //     preserveNullAndEmptyArrays: true,
+      //   },
+      // },
+      {
+        $project: {
+          phone: "$userData.phone",
+          fullName: "$userData.fullName",
+          email: 1,
+          specility: "$specialization",
+        },
+      },
+    ]);
+    return data[0];
+  } catch (error) {
+    return false;
+  }
+};
+const getAllTimings = async (condition, day) => {
+  try {
+    const project = { _id: 0 };
+    project[day] = 1;
+    return await EstablishmentTiming.model.aggregate([
+      { $match: condition },
+      { $project: project },
+      { $unwind: `$${day}` },
+    ]);
+  } catch (error) {
+    console.log(error);
+    return false;
+  }
+};
+
+const getDoctorDataByID = async (Model, condition) => {
+  try {
+    return await Model.aggregate([
+      { $match: condition },
+      {
+        $unwind: {
+          path: `$procedure`,
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $lookup: {
+          from: "proceduremasters",
+          localField: "procedure",
+          foreignField: "_id",
+          as: "procedureName",
+        },
+      },
+      {
+        $unwind: {
+          path: "$procedureName",
+          preserveNullAndEmptyArrays: false,
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          procedureId: { $ifNull: [`$procedureName._id`, constants.NA] },
+          name: { $ifNull: [`$procedureName.name`, constants.NA] },
+        },
+      },
+    ]);
+  } catch (error) {
+    console.log(error);
+    return false;
+  }
+};
+
+const getPatientDetails = async (patientId) => {
+  try {
+    const data = await Patient.model.aggregate([
+      { $match: { _id: new Types.ObjectId(patientId) } },
+      {
+        $lookup: {
+          from: "users",
+          localField: "userId",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      {
+        $unwind: {
+          path: "$user",
+          preserveNullAndEmptyArrays: false,
+        },
+      },
+    ]);
+    return data[0];
+  } catch (error) {
+    return false;
+  }
+};
+
+const slugForId = async (condition, city) => {
+  try {
+    const data = await Doctor.model.aggregate([
+      { $match: condition },
+      {
+        $lookup: {
+          from: "users",
+          localField: "userId",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      {
+        $unwind: {
+          path: "$user",
+          preserveNullAndEmptyArrays: false,
+        },
+      },
+      {
+        $match: {
+          isVerified: constants.PROFILE_STATUS.APPROVE,
+          steps: constants.PROFILE_STEPS.COMPLETED,
+          "user.status": { $ne: constants.PROFILE_STATUS.DEACTIVATE },
+          "user.isDeleted": false,
+        },
+      },
+      {
+        $lookup: {
+          from: "establishmenttimings",
+          let: { doctorId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$doctorId", "$$doctorId"] },
+                    { $eq: ["$isVerified", 2] },
+                    { $eq: ["$isDeleted", false] },
+                    { $eq: ["$isActive", true] },
+                  ],
+                },
+              },
+            },
+          ],
+          as: "establishmenttiming",
+        },
+      },
+      {
+        $unwind: {
+          path: "$establishmenttiming",
+          preserveNullAndEmptyArrays: false,
+        },
+      },
+      {
+        $lookup: {
+          from: "establishmentmasters",
+          localField: "establishmenttiming.establishmentId",
+          foreignField: "_id",
+          as: "establishmentMaster",
+        },
+      },
+      {
+        $unwind: {
+          path: "$establishmentMaster",
+          preserveNullAndEmptyArrays: false,
+        },
+      },
+      {
+        $lookup: {
+          from: "hospitals",
+          localField: "establishmentMaster.hospitalId",
+          foreignField: "_id",
+          as: "hospital",
+        },
+      },
+      {
+        $unwind: {
+          path: "$hospital",
+          preserveNullAndEmptyArrays: false,
+        },
+      },
+
+      {
+        $lookup: {
+          from: "users",
+          localField: "hospital.userId",
+          foreignField: "_id",
+          as: "hospitalUser",
+        },
+      },
+      {
+        $unwind: {
+          path: "$hospitalUser",
+          preserveNullAndEmptyArrays: false,
+        },
+      },
+      {
+        $match: {
+          "hospital.isVerified": constants.PROFILE_STATUS.APPROVE,
+          "hospital.steps": constants.PROFILE_STEPS.COMPLETED,
+          "hospitalUser.status": { $ne: constants.PROFILE_STATUS.DEACTIVATE },
+          "hospitalUser.isDeleted": false,
+          "establishmentMaster.address.city": {
+            $regex: new RegExp(`^${city}$`, "i"),
+          },
+        },
+      },
+      {
+        $project: {
+          doctorId: { $ifNull: [`$_id`, constants.NA] },
+          userId: { $ifNull: [`$user._id`, constants.NA] },
+          establishmentId: {
+            $ifNull: [`$establishmentMaster._id`, constants.NA],
+          },
+          address: {
+            $ifNull: [`$establishmentMaster.address`, constants.NA],
+          },
+        },
+      },
+    ]);
+    return data.length > 0 ? data[0] : false;
+  } catch (error) {
+    return false;
+  }
+};
+
+const doctorTimingPipeline = [
+  {
+    $match: {
+      isVerified: { $ne: constants.PROFILE_STATUS.REJECT },
+      isDeleted: false,
+      doctorId: { $exists: true },
+    },
+  },
+  {
+    $lookup: {
+      from: "doctors",
+      localField: "doctorId",
+      foreignField: "_id",
+      as: "doctor",
+    },
+  },
+  { $unwind: { path: "$doctor", preserveNullAndEmptyArrays: true } },
+  {
+    $lookup: {
+      from: "users",
+      localField: "doctor.userId",
+      foreignField: "_id",
+      as: "user",
+    },
+  },
+  { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
+  {
+    $lookup: {
+      from: "establishmentmasters",
+      localField: "establishmentId",
+      foreignField: "_id",
+      as: "establishmentMaster",
+    },
+  },
+  {
+    $unwind: {
+      path: "$establishmentMaster",
+      preserveNullAndEmptyArrays: true,
+    },
+  },
+  {
+    $lookup: {
+      from: "hospitals",
+      localField: "establishmentMaster.hospitalId",
+      foreignField: "_id",
+      as: "hospital",
+    },
+  },
+  {
+    $unwind: {
+      path: "$hospital",
+      preserveNullAndEmptyArrays: true,
+    },
+  },
+  {
+    $lookup: {
+      from: "users",
+      localField: "hospital.userId",
+      foreignField: "_id",
+      as: "hospitalUser",
+    },
+  },
+  { $unwind: { path: "$hospitalUser", preserveNullAndEmptyArrays: true } },
+  {
+    $match: {
+      "doctor.isVerified": { $ne: constants.PROFILE_STATUS.REJECT },
+      "doctor.steps": constants.PROFILE_STEPS.COMPLETED,
+      "user.isDeleted": false,
+      "user.status": constants.PROFILE_STATUS.ACTIVE,
+      "hospital.isVerified": { $ne: constants.PROFILE_STATUS.REJECT },
+      "hospital.steps": constants.PROFILE_STEPS.COMPLETED,
+      "hospitalUser.isDeleted": false,
+      "hospitalUser.status": constants.PROFILE_STATUS.ACTIVE,
+    },
+  },
+];
+
+const doctorListSitemap = async () => {
+  try {
+    const data = await EstablishmentTiming.model.aggregate([
+      ...doctorTimingPipeline,
+      {
+        $project: {
+          address: {
+            $ifNull: [
+              {
+                address: {
+                  $ifNull: [
+                    "$establishmentMaster.address.landmark",
+                    constants.NA,
+                  ],
+                },
+                locality: {
+                  $ifNull: [
+                    "$establishmentMaster.address.locality",
+                    constants.NA,
+                  ],
+                },
+                city: {
+                  $ifNull: ["$establishmentMaster.address.city", constants.NA],
+                },
+                cityName: {
+                  $ifNull: ["$establishmentMaster.address.city", constants.NA],
+                },
+                state: { $ifNull: ["$addressState.name", constants.NA] },
+                pincode: {
+                  $ifNull: [
+                    "$establishmentMaster.address.pincode",
+                    constants.NA,
+                  ],
+                },
+                country: {
+                  $ifNull: [
+                    "$establishmentMaster.address.country",
+                    constants.NA,
+                  ],
+                },
+              },
+              constants.NA,
+            ],
+          },
+          doctorProfileSlug: "$doctor.profileSlug",
+          updatedAt: "$doctor.updatedAt",
+        },
+      },
+    ]);
+    data.map((doctor, index) => {
+      const slugStr = doctor?.address?.city;
+      const citySlug = slugify(slugStr, {
+        lower: true,
+        remove: undefined,
+        strict: true,
+      });
+      data[index].address.city = citySlug;
+    });
+    return data;
+  } catch (error) {
+    return false;
+  }
+};
+
+const specializationListSitemap = async () => {
+  try {
+    const data = await EstablishmentTiming.model.aggregate([
+      ...doctorTimingPipeline,
+      {
+        $lookup: {
+          from: "specializations",
+          localField: "doctor.specialization",
+          foreignField: "_id",
+          as: "specialization",
+        },
+      },
+      {
+        $unwind: { path: "$specialization", preserveNullAndEmptyArrays: false },
+      },
+      {
+        $project: {
+          address: {
+            $ifNull: [
+              {
+                address: {
+                  $ifNull: [
+                    "$establishmentMaster.address.landmark",
+                    constants.NA,
+                  ],
+                },
+                locality: {
+                  $ifNull: [
+                    "$establishmentMaster.address.locality",
+                    constants.NA,
+                  ],
+                },
+                city: {
+                  $ifNull: ["$establishmentMaster.address.city", constants.NA],
+                },
+                cityName: {
+                  $ifNull: ["$establishmentMaster.address.city", constants.NA],
+                },
+                state: { $ifNull: ["$addressState.name", constants.NA] },
+                pincode: {
+                  $ifNull: [
+                    "$establishmentMaster.address.pincode",
+                    constants.NA,
+                  ],
+                },
+                country: {
+                  $ifNull: [
+                    "$establishmentMaster.address.country",
+                    constants.NA,
+                  ],
+                },
+              },
+              constants.NA,
+            ],
+          },
+          specialization: 1,
+        },
+      },
+      { $match: { address: { $ne: null } } },
+      {
+        $group: {
+          _id: {
+            city: "$address.city",
+            locality: "$address.locality",
+            specialization: "$specialization.slug",
+          },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+    data.map((doctor, index) => {
+      let slugStr = doctor?._id.city;
+      const citySlug = slugify(slugStr, {
+        lower: true,
+        remove: undefined,
+        strict: true,
+      });
+      slugStr = doctor?._id.locality;
+      const localitySlug = slugify(slugStr, {
+        lower: true,
+        remove: undefined,
+        strict: true,
+      });
+      data[index]._id.city = citySlug;
+      data[index]._id.locality = localitySlug;
+    });
+    return data;
+  } catch (error) {
+    return false;
+  }
+};
+
+const serviceListSitemap = async () => {
+  try {
+    const data = await EstablishmentTiming.model.aggregate([
+      ...doctorTimingPipeline,
+      {
+        $unwind: { path: "$doctor.service", preserveNullAndEmptyArrays: false },
+      },
+      {
+        $project: {
+          address: {
+            $ifNull: [
+              {
+                address: {
+                  $ifNull: [
+                    "$establishmentMaster.address.landmark",
+                    constants.NA,
+                  ],
+                },
+                locality: {
+                  $ifNull: [
+                    "$establishmentMaster.address.locality",
+                    constants.NA,
+                  ],
+                },
+                city: {
+                  $ifNull: ["$establishmentMaster.address.city", constants.NA],
+                },
+                cityName: {
+                  $ifNull: ["$establishmentMaster.address.city", constants.NA],
+                },
+                state: { $ifNull: ["$addressState.name", constants.NA] },
+                pincode: {
+                  $ifNull: [
+                    "$establishmentMaster.address.pincode",
+                    constants.NA,
+                  ],
+                },
+                country: {
+                  $ifNull: [
+                    "$establishmentMaster.address.country",
+                    constants.NA,
+                  ],
+                },
+              },
+              constants.NA,
+            ],
+          },
+          service: `$doctor.service.name`,
+        },
+      },
+      { $match: { address: { $ne: null } } },
+      {
+        $group: {
+          _id: {
+            city: "$address.city",
+            locality: "$address.locality",
+            service: "$service",
+          },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+    data.map((service, index) => {
+      let slugStr = service?._id.city;
+      const citySlug = slugify(slugStr, {
+        lower: true,
+        remove: undefined,
+        strict: true,
+      });
+      slugStr = service?._id.locality;
+      const localitySlug = slugify(slugStr, {
+        lower: true,
+        remove: undefined,
+        strict: true,
+      });
+      slugStr = service?._id.service;
+      const serviceSlug = slugify(slugStr, {
+        lower: true,
+        remove: undefined,
+        strict: true,
+      });
+      data[index]._id.service = serviceSlug;
+      data[index]._id.city = citySlug;
+      data[index]._id.locality = localitySlug;
+    });
+    return data;
+  } catch (error) {
     return false;
   }
 };
@@ -2534,8 +3887,6 @@ const establishmentspecialityListDoc = async (establishmentId, condition) => {
 module.exports = {
   filterDoctor,
   filterTopRatedDoctor,
-  // specializationAggregation,
-  // appointmentAggregation,
   calenderList,
   appointmentList,
   completeDoctorProfile,
@@ -2552,8 +3903,18 @@ module.exports = {
   establishmentRequest,
   doctorList,
   similarRecord,
-  doctorListBasedOnEstablishmentSpecility,
-  establishmentSpecialityList,
+  doctorListBasedOnProcedure,
+  establishmentProcedureList,
   specialityFirstLetterList,
   establishmentspecialityListDoc,
+  doctorDetails,
+  getAllTimings,
+  procedureHospitalDoctorWiseList,
+  getDoctorDataByID,
+  establishmentProcedureListNoFilter,
+  getPatientDetails,
+  slugForId,
+  doctorListSitemap,
+  specializationListSitemap,
+  serviceListSitemap,
 };

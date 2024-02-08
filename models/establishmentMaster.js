@@ -3,65 +3,53 @@ const db = require("../config/database").getUserDB();
 
 const EstablishmentMasterSchema = new Schema(
   {
-    doctorId: {
-      type: Schema.Types.ObjectId,
-      ref: "users",
-      // required: true,
-    },
     hospitalId: {
       type: Schema.Types.ObjectId,
       ref: "users",
-      // required: true,
     },
     city: {
       type: String,
-      // required: true,
     },
     isOwner: {
       type: Boolean,
-      // required: true
     },
     name: {
       type: String,
-      // required: true,
     },
     locality: {
       type: String,
-      // required: true,
     },
     propertyStatus: {
       type: Number,
       enum: [1, 2, 3, 4],
-      // required: true,
     },
-    establishmentProof: [{
-      url: {
-        type: String,
-        default: null
+    establishmentProof: [
+      {
+        url: {
+          type: String,
+          default: null,
+        },
+        fileType: {
+          type: String,
+          default: null,
+        },
       },
-      fileType: {
-        type: String,
-        default: null
-      }
-    }],
+    ],
     establishmentMobile: {
-      type: String
+      type: String,
     },
     establishmentEmail: {
-      type: String
+      type: String,
     },
     address: {
       landmark: {
         type: String,
-        // required: true,
       },
       locality: {
         type: String,
-        // required: true,
       },
       city: {
         type: String,
-        default: null,
       },
       state: {
         type: Schema.Types.ObjectId,
@@ -73,8 +61,15 @@ const EstablishmentMasterSchema = new Schema(
       },
       pincode: {
         type: String,
-        // required: true,
       },
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
+    isLocationShared: {
+      type: Boolean,
+      default: false,
     },
     location: {
       type: {
@@ -82,34 +77,26 @@ const EstablishmentMasterSchema = new Schema(
         default: "Point",
       },
       coordinates: {
-        type: [{
-          type: Number,
-          // required: true,
-        }],
+        type: [
+          {
+            type: Number,
+          },
+        ],
+        default: [77.216721, 28.6448],
         index: "2dsphere",
       },
     },
-    // location: {
-    //   type: {
-    //     type: String,
-    //     enum: ['Point'],
-    //     required: true
-    //   },
-    //   coordinates: {
-    //     type: [Number],
-    //     required: true
-    //   },
-    //   index: '2dsphere'
-    // },
-    location: {
-      latitude: {
-        type: Number,
-        // required: true,
-      },
-      longitude: {
-        type: Number,
-        // required: true,
-      },      // required: true,
+    totalreviews: {
+      type: Number,
+      default: 0,
+    },
+    rating: {
+      type: Number,
+      default: 0,
+    },
+    recommended: {
+      type: Number,
+      default: 0,
     },
     hospitalTypeId: {
       type: Schema.Types.ObjectId,
@@ -123,14 +110,15 @@ const EstablishmentMasterSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: "users",
     },
+    profileSlug: {
+      type: String,
+    },
   },
   {
     timestamps: true,
     versionKey: false,
   }
 );
-
-// EstablishmentMasterSchema.index({ location: '2dsphere' });
 
 const EstablishmentMaster = db.model(
   "EstablishmentMaster",
