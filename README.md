@@ -71,10 +71,3 @@ We welcome contributions! Follow these steps to contribute:
 This project is licensed under the [MIT License](LICENSE).  
 
 ---
-
-### **Notes for Public Repositories**  
-1. Sensitive information, such as database credentials and API keys, should be stored in a `.env` file and excluded from version control.  
-2. Avoid sharing internal design URLs, credentials, or sensitive documentation.  
-
----
-
